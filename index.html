@@ -1,1115 +1,1140 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KitForge — Jersey Designer</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Derby FTBL — Конструктор формы</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <style>
+    /* ─── TOKENS ─────────────────────────────────────────────────── */
+    :root {
+      --bg:         #080808;
+      --panel:      #101010;
+      --panel2:     #161616;
+      --border:     #252525;
+      --border2:    #1e1e1e;
+      --accent:     #c8f135;
+      --accent2:    #9abf1a;
+      --text:       #f0f0f0;
+      --text-muted: #666;
+      --text-dim:   #999;
+      --danger:     #e05252;
+      --panel-w:    260px;
+      --header-h:   52px;
+    }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ─── RESET ──────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
 
-:root {
-  --bg: #0c0c12;
-  --surface: #141420;
-  --surface2: #1e1e2e;
-  --surface3: #252538;
-  --border: #2e2e44;
-  --accent: #e63232;
-  --accent-hover: #c42020;
-  --gold: #f5a623;
-  --text: #f0f0f5;
-  --text2: #9090a8;
-  --text3: #505068;
-  --green: #2ecc71;
-  --radius: 10px;
-}
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.4;
+    }
 
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow: hidden; }
+    /* ─── SCROLLBAR ──────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 
-/* ─── HEADER ─── */
-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 28px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 100;
-}
-.logo { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 4px; }
-.logo span { color: var(--accent); }
-.logo em { color: var(--text2); font-style: normal; font-size: 13px; letter-spacing: 1px; margin-left: 10px; font-family: 'DM Sans'; font-weight: 400; }
-.header-badge { background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; letter-spacing: 1px; text-transform: uppercase; }
+    /* ─── LAYOUT ─────────────────────────────────────────────────── */
+    #app {
+      display: grid;
+      grid-template-rows: var(--header-h) 1fr;
+      grid-template-columns: var(--panel-w) 1fr var(--panel-w);
+      height: 100vh;
+    }
 
-/* ─── LAYOUT ─── */
-.app {
-  display: grid;
-  grid-template-columns: 310px 1fr 290px;
-  height: calc(100vh - 57px);
-  overflow: hidden;
-}
+    /* ─── HEADER ─────────────────────────────────────────────────── */
+    #header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
 
-/* ─── PANELS ─── */
-.panel {
-  background: var(--surface);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 20px 18px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-.panel::-webkit-scrollbar { width: 5px; }
-.panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-.panel-left { border-right: 1px solid var(--border); }
-.panel-right { border-left: 1px solid var(--border); }
+    #header .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
 
-.section { margin-bottom: 22px; }
-.section-label {
-  font-size: 10px; font-weight: 600; letter-spacing: 1.8px;
-  text-transform: uppercase; color: var(--text3);
-  margin-bottom: 10px;
-}
-.panel-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 16px; letter-spacing: 2.5px; color: var(--accent);
-  margin-bottom: 14px; padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
+    #header .logo-mark {
+      background: var(--accent);
+      color: #000;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+    }
 
-/* ─── UPLOAD ZONES ─── */
-.upload-zone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 16px 14px;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-.upload-zone:hover, .upload-zone.dragover {
-  border-color: var(--accent);
-  background: rgba(230,50,50,0.05);
-}
-.upload-zone input[type=file] {
-  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-}
-.upload-icon { font-size: 22px; margin-bottom: 4px; }
-.upload-text { font-size: 12px; color: var(--text2); }
-.upload-text strong { color: var(--text); display: block; font-size: 13px; margin-bottom: 2px; }
-.upload-name { margin-top: 7px; font-size: 11px; color: var(--green); font-weight: 500; word-break: break-all; min-height: 16px; }
+    #header .tagline {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
 
-/* ─── FONT LIBRARY ─── */
-.font-library { margin-top: 8px; }
-.font-item {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 7px; padding: 8px 10px; margin-bottom: 6px;
-  cursor: pointer; transition: border-color 0.15s;
-}
-.font-item:hover { border-color: var(--accent); }
-.font-item.active { border-color: var(--gold); background: rgba(245,166,35,0.08); }
-.font-item-name { font-size: 12px; font-weight: 500; }
-.font-item-preview { font-size: 15px; color: var(--text2); }
-.font-item-del {
-  background: none; border: none; color: var(--text3); cursor: pointer;
-  font-size: 14px; padding: 2px 5px; border-radius: 4px; transition: color 0.15s;
-}
-.font-item-del:hover { color: var(--accent); }
-.font-loading {
-  font-size: 11px; color: var(--gold); padding: 4px 8px;
-  background: rgba(245,166,35,0.1); border-radius: 5px; margin-top: 6px;
-  display: none;
-}
+    #header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-/* ─── INPUTS ─── */
-label.field-label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; font-weight: 500; }
-input[type=text], input[type=number], select {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 11px; color: var(--text);
-  font-family: 'DM Sans', sans-serif; font-size: 13px;
-  outline: none; transition: border-color 0.15s; margin-bottom: 10px;
-}
-input[type=text]:focus, input[type=number]:focus, select:focus { border-color: var(--accent); }
-select option { background: var(--surface2); }
-input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
-.range-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.range-row input[type=range] { flex: 1; margin: 0; }
-.range-val { font-size: 11px; color: var(--gold); width: 32px; text-align: right; font-weight: 600; }
-.color-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-input[type=color] {
-  width: 34px; height: 34px; border: 1px solid var(--border);
-  border-radius: 7px; background: none; cursor: pointer; padding: 2px;
-}
-.swatch {
-  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
-  border: 2px solid transparent; transition: border-color 0.15s, transform 0.12s;
-}
-.swatch:hover { transform: scale(1.2); }
-.swatch.active { border-color: #fff; }
-.checkbox-row { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; cursor: pointer; }
-.checkbox-row input[type=checkbox] { accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; }
-.checkbox-row span { font-size: 12px; }
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.two-col .checkbox-row { margin: 0; }
+    /* ─── PANELS ─────────────────────────────────────────────────── */
+    #left-panel, #right-panel {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #right-panel { border-right: none; border-left: 1px solid var(--border); }
 
-/* ─── BUTTONS ─── */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 9px 16px; border-radius: 8px;
-  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
-  cursor: pointer; border: none; transition: all 0.18s;
-  letter-spacing: 0.2px; width: 100%; margin-bottom: 7px;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-.btn-secondary:hover { background: var(--surface3); }
-.btn-gold { background: var(--gold); color: #000; font-weight: 700; }
-.btn-gold:hover { background: #e09400; }
-.btn-small { padding: 7px 12px; font-size: 11px; width: auto; display: inline-flex; margin-bottom: 0; }
+    /* ─── CANVAS AREA ────────────────────────────────────────────── */
+    #canvas-area {
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
 
-/* ─── CANVAS AREA ─── */
-.canvas-area {
-  background: var(--bg);
-  display: flex; flex-direction: column; align-items: center;
-  padding: 20px 16px; gap: 14px; overflow: auto;
-}
-.view-tabs { display: flex; background: var(--surface2); border-radius: 8px; padding: 3px; gap: 3px; }
-.tab-btn {
-  padding: 7px 18px; border: none; background: transparent;
-  color: var(--text2); font-family: 'DM Sans', sans-serif; font-size: 12px;
-  font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.18s;
-}
-.tab-btn.active { background: var(--accent); color: #fff; }
-.canvas-wrapper { position: relative; display: inline-block; }
-#jerseyCanvas {
-  display: block; border-radius: var(--radius);
-  box-shadow: 0 16px 50px rgba(0,0,0,0.7);
-  max-width: 100%; cursor: default;
-}
-.canvas-hint { font-size: 11px; color: var(--text3); text-align: center; line-height: 1.5; }
-.canvas-hint strong { color: var(--gold); }
-.export-row { display: flex; gap: 8px; width: 100%; max-width: 360px; }
-.export-row .btn { margin-bottom: 0; }
+    #canvas-wrap {
+      position: relative;
+      border: 1px solid #1f1f1f;
+      box-shadow: 0 0 60px rgba(200, 241, 53, 0.04), 0 0 0 1px rgba(200,241,53,0.05);
+      border-radius: 2px;
+    }
 
-/* ─── LAYER LIST ─── */
-.layer-item {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 9px 11px; margin-bottom: 7px;
-  display: flex; align-items: center; justify-content: space-between;
-  cursor: pointer; transition: border-color 0.15s;
-}
-.layer-item:hover { border-color: var(--accent); }
-.layer-item.selected { border-color: var(--gold); background: rgba(245,166,35,0.06); }
-.layer-label { font-size: 12px; font-weight: 500; }
-.layer-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
-.layer-del {
-  background: none; border: none; color: var(--text3); cursor: pointer;
-  font-size: 14px; padding: 2px 6px; border-radius: 4px; transition: color 0.15s;
-}
-.layer-del:hover { color: var(--accent); }
-.empty-state { text-align: center; color: var(--text3); font-size: 12px; padding: 16px 0; line-height: 1.6; }
+    #canvas-wrap canvas { display: block; }
 
-/* ─── SELECTED PROPS ─── */
-.props-panel { background: var(--surface2); border-radius: var(--radius); padding: 14px; margin-top: 12px; }
-.props-title { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+    #canvas-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
 
-/* ─── STATUS ─── */
-#statusMsg {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  background: var(--surface); border: 1px solid var(--border);
-  color: var(--text); padding: 9px 22px; border-radius: 30px;
-  font-size: 12px; font-weight: 500; pointer-events: none;
-  opacity: 0; transition: opacity 0.25s; z-index: 999; white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-}
-#statusMsg.show { opacity: 1; }
-#statusMsg.success { border-color: var(--green); color: var(--green); }
-#statusMsg.error { border-color: var(--accent); color: var(--accent); }
+    #canvas-placeholder svg { opacity: 0.3; }
+    #canvas-placeholder p { font-size: 13px; }
+    #canvas-placeholder .hint { font-size: 11px; color: #444; }
 
-/* ─── DIVIDER ─── */
-hr.div { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    /* ─── SECTION HEADER ─────────────────────────────────────────── */
+    .section-head {
+      padding: 10px 14px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border2);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      z-index: 1;
+    }
 
-/* ─── RESPONSIVE ─── */
-@media (max-width: 1050px) { .app { grid-template-columns: 270px 1fr 260px; } }
-@media (max-width: 850px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: auto auto auto; height: auto; overflow: visible; }
-  html, body { overflow: auto; }
-  .panel { max-height: 50vh; }
-  .canvas-area { min-height: 55vw; }
-}
-</style>
+    .section-body { padding: 10px 12px; }
+    .section-body + .section-head { margin-top: 4px; }
+
+    /* ─── BUTTONS ─────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover { background: var(--accent2); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--panel2); color: var(--text); border-color: #333; }
+
+    .btn-panel {
+      background: var(--panel2);
+      color: var(--text-dim);
+      border: 1px solid var(--border2);
+      width: 100%;
+    }
+    .btn-panel:hover { background: #1f1f1f; color: var(--text); }
+
+    .btn-icon {
+      padding: 6px;
+      background: var(--panel2);
+      color: var(--text-dim);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .btn-icon:hover { color: var(--text); background: #1e1e1e; }
+    .btn-icon.danger:hover { color: var(--danger); }
+
+    .btn-accent-ghost {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid rgba(200,241,53,0.25);
+    }
+    .btn-accent-ghost:hover { background: rgba(200,241,53,0.07); }
+
+    .btn-download {
+      background: var(--accent);
+      color: #000;
+      padding: 8px 18px;
+      font-size: 13px;
+    }
+    .btn-download:hover { background: var(--accent2); }
+
+    .btn-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ─── FORM CONTROLS ───────────────────────────────────────────── */
+    .form-group { margin-bottom: 10px; }
+    .form-group label {
+      display: block;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 6px 9px;
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus { border-color: rgba(200,241,53,0.4); }
+    .form-select { cursor: pointer; }
+    .form-select option { background: #161616; }
+
+    .form-row { display: flex; gap: 6px; }
+    .form-row .form-group { flex: 1; }
+
+    /* Color input special */
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: 100%;
+      height: 30px;
+      padding: 2px 4px;
+      background: var(--panel2);
+      cursor: pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+    /* Range input */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      margin: 4px 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .range-row input[type="range"] { flex: 1; }
+    .range-val {
+      font-size: 11px;
+      color: var(--text-dim);
+      min-width: 28px;
+      text-align: right;
+    }
+
+    /* ─── LAYER LIST ─────────────────────────────────────────────── */
+    #layer-list { list-style: none; }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border2);
+      cursor: pointer;
+      transition: background 0.1s;
+      user-select: none;
+    }
+    .layer-item:hover { background: var(--panel2); }
+    .layer-item.active { background: rgba(200,241,53,0.06); border-left: 2px solid var(--accent); padding-left: 10px; }
+
+    .layer-icon {
+      font-size: 11px;
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .layer-name {
+      flex: 1;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .layer-actions { display: flex; gap: 2px; flex-shrink: 0; }
+    .layer-actions button {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      font-size: 13px;
+      border-radius: 3px;
+      transition: color 0.1s;
+    }
+    .layer-actions button:hover { color: var(--text); }
+    .layer-actions button.del:hover { color: var(--danger); }
+
+    /* ─── EMPTY STATE ────────────────────────────────────────────── */
+    .empty-state {
+      padding: 20px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* ─── PROPS PANEL ────────────────────────────────────────────── */
+    #props-empty {
+      padding: 24px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    #props-panel { display: none; }
+    #props-panel.visible { display: block; }
+
+    /* ─── UPLOAD ZONE ────────────────────────────────────────────── */
+    .upload-zone {
+      border: 1px dashed var(--border);
+      border-radius: 4px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(200,241,53,0.03); color: var(--text); }
+    .upload-zone .ico { font-size: 20px; margin-bottom: 4px; opacity: 0.5; }
+
+    input[type="file"] { display: none; }
+
+    /* ─── TOAST ──────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 5px;
+      font-size: 12px;
+      transition: transform 0.25s ease;
+      z-index: 1000;
+      pointer-events: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── MOBILE TOGGLE ──────────────────────────────────────────── */
+    .panel-toggle-btn {
+      display: none;
+      position: fixed;
+      bottom: 16px;
+      z-index: 100;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    /* ─── DIVIDER ────────────────────────────────────────────────── */
+    .divider { border: none; border-top: 1px solid var(--border2); margin: 6px 0; }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #app {
+        grid-template-columns: 240px 1fr;
+        grid-template-rows: var(--header-h) 1fr;
+      }
+      #right-panel {
+        display: none;
+        position: fixed;
+        right: 0;
+        top: var(--header-h);
+        bottom: 0;
+        width: 240px;
+        z-index: 50;
+        border-left: 1px solid var(--border);
+      }
+      #right-panel.open { display: block; }
+      .panel-toggle-btn { display: flex; align-items: center; justify-content: center; right: 16px; }
+    }
+
+    @media (max-width: 640px) {
+      #app { grid-template-columns: 1fr; }
+      #left-panel {
+        display: none;
+        position: fixed;
+        left: 0;
+        top: var(--header-h);
+        bottom: 0;
+        width: 240px;
+        z-index: 50;
+        border-right: 1px solid var(--border);
+      }
+      #left-panel.open { display: block; }
+    }
+
+    /* ─── FONT CHIPS ─────────────────────────────────────────────── */
+    .font-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin: 2px;
+    }
+    .font-chip button {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 1px;
+      line-height: 1;
+    }
+    .font-chip button:hover { color: var(--danger); }
+    #font-chips { flex-wrap: wrap; display: flex; margin-top: 6px; min-height: 10px; }
+  </style>
 </head>
 <body>
+<div id="app">
 
-<header>
-  <div class="logo"><span>Kit</span>Forge<em>Jersey Designer</em></div>
-  <div class="header-badge">Pro Tool</div>
-</header>
-
-<div class="app">
-
-<!-- ═══ LEFT PANEL ═══ -->
-<div class="panel panel-left">
-
-  <!-- Jersey Upload -->
-  <div class="section">
-    <div class="panel-title">⚽ Jersey Image</div>
-    <div class="section-label">Upload for current view</div>
-    <div class="upload-zone" id="jerseyUploadZone">
-      <input type="file" id="jerseyFile" accept="image/*">
-      <div class="upload-icon">👕</div>
-      <div class="upload-text"><strong>Drop or click to upload</strong>PNG, JPG, WebP</div>
+  <!-- ══ HEADER ══════════════════════════════════════════════════ -->
+  <header id="header">
+    <div class="logo">
+      <span class="logo-mark">DERBY</span>
+      <span>Конструктор формы</span>
     </div>
-    <div class="upload-name" id="jerseyFileName">No image loaded</div>
-    <div style="margin-top:8px;display:flex;gap:6px;">
-      <button class="btn btn-secondary btn-small" id="copyFrontBtn">Copy Front → Back</button>
-      <button class="btn btn-secondary btn-small" id="copyBackBtn">Copy Back → Front</button>
+    <span class="tagline">Atyrau, Kazakhstan</span>
+    <div id="header-actions">
+      <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
+      <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
+      <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
     </div>
-  </div>
+  </header>
 
-  <hr class="div">
+  <!-- ══ LEFT PANEL ═══════════════════════════════════════════════ -->
+  <aside id="left-panel">
 
-  <!-- Font Section -->
-  <div class="section">
-    <div class="panel-title">🔤 Fonts</div>
-    <div class="section-label">Upload custom font files</div>
-    <div class="upload-zone" id="fontUploadZone">
-      <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2" multiple>
-      <div class="upload-icon">📂</div>
-      <div class="upload-text"><strong>Drop font files here</strong>TTF, OTF, WOFF — multiple OK</div>
-    </div>
-    <div class="font-loading" id="fontLoading">⏳ Loading font…</div>
-
-    <div class="section-label" style="margin-top:12px;">Loaded fonts</div>
-    <div class="font-library" id="fontLibrary">
-      <!-- built-ins injected by JS -->
-    </div>
-  </div>
-
-  <hr class="div">
-
-  <!-- Add Text -->
-  <div class="section">
-    <div class="panel-title">✏️ Add Text</div>
-
-    <label class="field-label">Text content</label>
-    <input type="text" id="textInput" placeholder="e.g. SPONSOR NAME or 10">
-
-    <label class="field-label">Font size</label>
-    <div class="range-row">
-      <input type="range" id="fontSize" min="8" max="220" value="60">
-      <span class="range-val" id="fontSizeVal">60</span>
+    <!-- Jersey upload -->
+    <div class="section-head">Фон — Форма</div>
+    <div class="section-body">
+      <label for="file-jersey" class="upload-zone">
+        <div class="ico">👕</div>
+        <div>Загрузить изображение формы</div>
+        <div style="font-size:10px;margin-top:3px;color:#444">PNG / JPG</div>
+      </label>
+      <input type="file" id="file-jersey" accept="image/png,image/jpeg,image/webp" onchange="loadJersey(event)" />
     </div>
 
-    <label class="field-label">Text color</label>
-    <div class="color-row">
-      <input type="color" id="textColor" value="#ffffff">
-      <div id="colorSwatches" style="display:flex;gap:5px;flex-wrap:wrap;">
-        <div class="swatch active" style="background:#ffffff" data-color="#ffffff"></div>
-        <div class="swatch" style="background:#000000" data-color="#000000"></div>
-        <div class="swatch" style="background:#e63232" data-color="#e63232"></div>
-        <div class="swatch" style="background:#f5a623" data-color="#f5a623"></div>
-        <div class="swatch" style="background:#1a1ac8" data-color="#1a1ac8"></div>
-        <div class="swatch" style="background:#ffd700" data-color="#ffd700"></div>
-        <div class="swatch" style="background:#00c8c8" data-color="#00c8c8"></div>
+    <!-- Add text -->
+    <div class="section-head">Текст</div>
+    <div class="section-body">
+      <div class="form-group">
+        <label>Текст</label>
+        <input class="form-input" id="new-text" placeholder="Имя игрока, спонсор..." />
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-panel" onclick="addText()">＋ Добавить текст</button>
+        <button class="btn btn-panel" onclick="addNumber()">＃ Номер</button>
       </div>
     </div>
 
-    <label class="field-label">Outline (stroke)</label>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-      <input type="color" id="strokeColor" value="#000000" style="flex-shrink:0;">
-      <div class="range-row" style="flex:1;margin:0">
-        <input type="range" id="strokeWidth" min="0" max="14" value="0">
-        <span class="range-val" id="strokeWidthVal">0</span>
+    <!-- Add logo -->
+    <div class="section-head">Логотип / Изображение</div>
+    <div class="section-body">
+      <label for="file-logo" class="upload-zone">
+        <div class="ico">🏅</div>
+        <div>Загрузить логотип</div>
+        <div style="font-size:10px;margin-top:3px;color:#444">PNG / JPG / SVG</div>
+      </label>
+      <input type="file" id="file-logo" accept="image/*" onchange="addLogo(event)" />
+    </div>
+
+    <!-- Custom fonts -->
+    <div class="section-head">Шрифты</div>
+    <div class="section-body">
+      <label for="file-font" class="upload-zone">
+        <div class="ico">🔤</div>
+        <div>Загрузить шрифт</div>
+        <div style="font-size:10px;margin-top:3px;color:#444">TTF / OTF / WOFF</div>
+      </label>
+      <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" multiple onchange="loadFont(event)" />
+      <div id="font-chips"></div>
+    </div>
+
+    <!-- Layers -->
+    <div class="section-head">Слои</div>
+    <ul id="layer-list">
+      <li class="empty-state">Слоёв пока нет</li>
+    </ul>
+
+  </aside>
+
+  <!-- ══ CANVAS AREA ═══════════════════════════════════════════════ -->
+  <main id="canvas-area">
+    <div id="canvas-wrap">
+      <canvas id="c"></canvas>
+      <div id="canvas-placeholder">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/>
+        </svg>
+        <p>Загрузите изображение формы</p>
+        <p class="hint">Используйте панель слева</p>
       </div>
     </div>
+  </main>
 
-    <div class="two-col">
-      <label class="checkbox-row"><input type="checkbox" id="textUppercase" checked><span>Uppercase</span></label>
-      <label class="checkbox-row"><input type="checkbox" id="textBold"><span>Bold</span></label>
-      <label class="checkbox-row"><input type="checkbox" id="textItalic"><span>Italic</span></label>
-      <label class="checkbox-row"><input type="checkbox" id="textShadow"><span>Shadow</span></label>
+  <!-- ══ RIGHT PANEL ═══════════════════════════════════════════════ -->
+  <aside id="right-panel">
+    <div class="section-head">Свойства слоя</div>
+
+    <div id="props-empty" class="empty-state">
+      Выберите слой для редактирования
     </div>
 
-    <label class="field-label">Letter spacing</label>
-    <div class="range-row">
-      <input type="range" id="letterSpacing" min="-5" max="40" value="0">
-      <span class="range-val" id="letterSpacingVal">0</span>
-    </div>
+    <div id="props-panel">
 
-    <label class="field-label">Opacity</label>
-    <div class="range-row">
-      <input type="range" id="textOpacity" min="10" max="100" value="100">
-      <span class="range-val" id="textOpacityVal">100</span>
-    </div>
-
-    <label class="field-label">Preset position</label>
-    <select id="textPresetPos">
-      <option value="front-center">Front center (sponsor)</option>
-      <option value="back-name">Back top (player name)</option>
-      <option value="back-number">Back center (number)</option>
-      <option value="chest-left">Chest left (badge)</option>
-      <option value="custom">Custom (drag)</option>
-    </select>
-
-    <button class="btn btn-primary" id="addTextBtn">＋ Add to Jersey</button>
-  </div>
-</div>
-
-<!-- ═══ CANVAS ═══ -->
-<div class="canvas-area">
-  <div class="view-tabs">
-    <button class="tab-btn active" data-view="front">Front View</button>
-    <button class="tab-btn" data-view="back">Back View</button>
-  </div>
-
-  <div class="canvas-wrapper">
-    <canvas id="jerseyCanvas" width="600" height="700"></canvas>
-  </div>
-
-  <div class="canvas-hint">
-    <strong>Click</strong> layer to select · <strong>Drag</strong> to move · <strong>Scroll</strong> on selected to resize
-  </div>
-
-  <div class="export-row">
-    <button class="btn btn-gold" id="exportBtn">⬇ Export View</button>
-    <button class="btn btn-secondary" id="exportBothBtn">⬇ Both Views</button>
-  </div>
-</div>
-
-<!-- ═══ RIGHT PANEL ═══ -->
-<div class="panel panel-right">
-  <div class="panel-title">🗂 Layers</div>
-
-  <div id="layerList"></div>
-  <div class="empty-state" id="emptyLayers">No text layers yet.<br>Add text from the left panel.</div>
-
-  <!-- Selected layer props -->
-  <div id="selectedProps" style="display:none">
-    <hr class="div">
-    <div class="props-panel">
-      <div class="props-title">Selected layer</div>
-
-      <label class="field-label">Edit text</label>
-      <input type="text" id="editText" placeholder="Text content">
-
-      <label class="field-label">Font (selected layer)</label>
-      <select id="propFont"></select>
-
-      <label class="field-label">Font size</label>
-      <div class="range-row">
-        <input type="range" id="propSize" min="8" max="220" value="60">
-        <span class="range-val" id="propSizeVal">60</span>
-      </div>
-
-      <label class="field-label">Color</label>
-      <div class="color-row" style="margin-bottom:10px">
-        <input type="color" id="propColor" value="#ffffff">
-      </div>
-
-      <label class="field-label">Stroke</label>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
-        <input type="color" id="propStrokeColor" value="#000000" style="flex-shrink:0">
-        <div class="range-row" style="flex:1;margin:0">
-          <input type="range" id="propStroke" min="0" max="14" value="0">
-          <span class="range-val" id="propStrokeVal">0</span>
+      <!-- Text props -->
+      <div id="text-props">
+        <div class="section-body">
+          <div class="form-group">
+            <label>Текст</label>
+            <input class="form-input" id="prop-text" oninput="updateProp('text')" />
+          </div>
+          <div class="form-group">
+            <label>Шрифт</label>
+            <select class="form-select" id="prop-font" onchange="updateProp('font')">
+              <option value="Inter">Inter</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Impact">Impact</option>
+              <option value="Courier New">Courier New</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Размер</label>
+              <input class="form-input" type="number" id="prop-fontsize" min="6" max="300" oninput="updateProp('fontSize')" />
+            </div>
+            <div class="form-group">
+              <label>Цвет</label>
+              <input type="color" id="prop-color" oninput="updateProp('color')" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Жирность</label>
+            <select class="form-select" id="prop-weight" onchange="updateProp('fontWeight')">
+              <option value="normal">Обычный</option>
+              <option value="bold">Жирный</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <label class="field-label">X position</label>
-      <div class="range-row">
-        <input type="range" id="propX" min="0" max="600" value="300">
-        <span class="range-val" id="propXVal">300</span>
+      <!-- Common props -->
+      <div class="section-body">
+        <div class="form-group">
+          <label>Прозрачность</label>
+          <div class="range-row">
+            <input type="range" id="prop-opacity" min="0" max="1" step="0.01" oninput="updateProp('opacity')" />
+            <span class="range-val" id="prop-opacity-val">100%</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Поворот</label>
+          <div class="range-row">
+            <input type="range" id="prop-angle" min="-180" max="180" step="1" oninput="updateProp('angle')" />
+            <span class="range-val" id="prop-angle-val">0°</span>
+          </div>
+        </div>
       </div>
 
-      <label class="field-label">Y position</label>
-      <div class="range-row">
-        <input type="range" id="propY" min="0" max="700" value="350">
-        <span class="range-val" id="propYVal">350</span>
+      <div class="section-body">
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="bringForward()">↑ Вверх</button>
+          <button class="btn btn-ghost" onclick="sendBackward()">↓ Вниз</button>
+        </div>
+        <button class="btn btn-panel" style="color:var(--danger);border-color:#2d1a1a;" onclick="deleteSelected()">
+          ✕ Удалить слой
+        </button>
       </div>
 
-      <label class="field-label">Rotation</label>
-      <div class="range-row">
-        <input type="range" id="propRotation" min="-180" max="180" value="0">
-        <span class="range-val" id="propRotationVal">0°</span>
-      </div>
-
-      <label class="field-label">Letter spacing</label>
-      <div class="range-row">
-        <input type="range" id="propSpacing" min="-5" max="40" value="0">
-        <span class="range-val" id="propSpacingVal">0</span>
-      </div>
-
-      <label class="field-label">Alignment</label>
-      <select id="propAlign" style="margin-bottom:10px">
-        <option value="center">Center</option>
-        <option value="left">Left</option>
-        <option value="right">Right</option>
-      </select>
-
-      <div class="two-col" style="margin-bottom:10px">
-        <label class="checkbox-row"><input type="checkbox" id="propBold"><span>Bold</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="propItalic"><span>Italic</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="propUpper"><span>Uppercase</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="propShadow"><span>Shadow</span></label>
-      </div>
-
-      <button class="btn btn-secondary" id="duplicateBtn">⧉ Duplicate</button>
-      <button class="btn btn-secondary" style="color:var(--accent);border-color:var(--accent)" id="deleteBtn">✕ Delete Layer</button>
     </div>
-  </div>
+  </aside>
 
-  <hr class="div">
-  <div class="panel-title">⚙️ Canvas</div>
-
-  <label class="field-label">Background</label>
-  <div class="color-row" style="margin-bottom:12px">
-    <input type="color" id="bgColor" value="#cccccc">
-    <label class="checkbox-row" style="margin:0"><input type="checkbox" id="bgTransparent" checked><span>Transparent</span></label>
-  </div>
-
-  <label class="field-label">Canvas size</label>
-  <select id="canvasSize" style="margin-bottom:12px">
-    <option value="600x700">600 × 700 (Default)</option>
-    <option value="800x900">800 × 900 (Large)</option>
-    <option value="1200x1400">1200 × 1400 (Print)</option>
-    <option value="500x500">500 × 500 (Square)</option>
-  </select>
-
-  <button class="btn btn-secondary" id="clearAllBtn">🗑 Clear All Layers</button>
 </div>
 
-</div><!-- .app -->
+<!-- Mobile toggle -->
+<button class="panel-toggle-btn" onclick="document.getElementById('right-panel').classList.toggle('open')">⚙</button>
 
-<div id="statusMsg"></div>
+<!-- Toast -->
+<div id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════════
-//  STATE
-// ══════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════════════ */
 const state = {
-  jerseyImageFront: null,
-  jerseyImageBack: null,
-  currentView: 'front',
-  layers: [],
-  selectedId: null,
-  dragging: false,
-  dragOffsetX: 0,
-  dragOffsetY: 0,
-  canvasW: 600,
-  canvasH: 700,
+  canvas: null,
+  jerseyImg: null,
+  customFonts: [],     // [{name, family}]
+  layerMeta: new Map() // fabricObj -> {id, type, name}
 };
-let layerIdCounter = 1;
 
-// Font registry: { name, label, loaded }
-const fontRegistry = [
-  { name: 'Bebas Neue', label: 'Bebas Neue', builtin: true },
-  { name: 'Impact', label: 'Impact', builtin: true },
-  { name: 'Arial Black', label: 'Arial Black', builtin: true },
-  { name: 'Georgia', label: 'Georgia', builtin: true },
-  { name: 'Courier New', label: 'Courier New', builtin: true },
-];
-let activeFontName = 'Bebas Neue';
+let layerCounter = 0;
 
-const canvas = document.getElementById('jerseyCanvas');
-const ctx = canvas.getContext('2d');
-
-// ══════════════════════════════════════════════
-//  FONT LIBRARY UI
-// ══════════════════════════════════════════════
-function renderFontLibrary() {
-  const lib = document.getElementById('fontLibrary');
-  lib.innerHTML = fontRegistry.map(f => `
-    <div class="font-item ${f.name === activeFontName ? 'active' : ''}" data-font="${f.name}">
-      <div>
-        <div class="font-item-name">${f.label}</div>
-        <div class="font-item-preview" style="font-family:'${f.name}',sans-serif;font-size:17px;">Abc 123</div>
-      </div>
-      ${f.builtin ? '' : `<button class="font-item-del" data-del="${f.name}">✕</button>`}
-    </div>
-  `).join('');
-
-  lib.querySelectorAll('.font-item').forEach(el => {
-    el.addEventListener('click', e => {
-      if (e.target.dataset.del) return;
-      activeFontName = el.dataset.font;
-      renderFontLibrary();
-      rebuildFontSelects();
-    });
-  });
-  lib.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      fontRegistry.splice(fontRegistry.findIndex(f => f.name === btn.dataset.del), 1);
-      if (activeFontName === btn.dataset.del) activeFontName = fontRegistry[0].name;
-      renderFontLibrary();
-      rebuildFontSelects();
-    });
-  });
-}
-
-// Rebuild the per-layer font dropdown in right panel
-function rebuildFontSelects() {
-  const sel = document.getElementById('propFont');
-  const prev = sel.value;
-  sel.innerHTML = fontRegistry.map(f => `<option value="${f.name}">${f.label}</option>`).join('');
-  if (fontRegistry.find(f => f.name === prev)) sel.value = prev;
-}
-
-// ══════════════════════════════════════════════
-//  FONT UPLOAD — the key fix
-// ══════════════════════════════════════════════
-document.getElementById('fontFile').addEventListener('change', async function(e) {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
-  const loadingEl = document.getElementById('fontLoading');
-  loadingEl.style.display = 'block';
-
-  for (const file of files) {
-    const fontName = 'Custom_' + file.name.replace(/\.[^.]+$/, '').replace(/\s+/g,'_') + '_' + Date.now();
-    const url = URL.createObjectURL(file);
-    try {
-      const ff = new FontFace(fontName, `url(${url})`);
-      // CRITICAL: await the load before adding
-      const loaded = await ff.load();
-      document.fonts.add(loaded);
-
-      // Wait for font to be actually available in document.fonts
-      await document.fonts.ready;
-
-      const label = file.name.replace(/\.[^.]+$/, '');
-      fontRegistry.unshift({ name: fontName, label: '✓ ' + label, builtin: false });
-      activeFontName = fontName;
-      renderFontLibrary();
-      rebuildFontSelects();
-      showStatus('Font loaded: ' + label, 'success');
-    } catch (err) {
-      showStatus('Font error: ' + err.message, 'error');
-    }
+/* ══════════════════════════════════════════════════════════════════
+   INIT FABRIC CANVAS
+══════════════════════════════════════════════════════════════════ */
+function initCanvas(w = 600, h = 700) {
+  if (state.canvas) {
+    state.canvas.dispose();
   }
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.style.width  = w + 'px';
+  wrap.style.height = h + 'px';
 
-  loadingEl.style.display = 'none';
-  e.target.value = ''; // reset input so same file can be re-uploaded
-});
+  state.canvas = new fabric.Canvas('c', {
+    width:               w,
+    height:              h,
+    backgroundColor:     '#1a1a1a',
+    preserveObjectStacking: true,
+    selection:           true,
+  });
 
-// ══════════════════════════════════════════════
-//  JERSEY IMAGE UPLOAD
-// ══════════════════════════════════════════════
-document.getElementById('jerseyFile').addEventListener('change', function(e) {
+  state.canvas.on('selection:created',  syncPropsPanel);
+  state.canvas.on('selection:updated',  syncPropsPanel);
+  state.canvas.on('selection:cleared',  clearPropsPanel);
+  state.canvas.on('object:modified',    syncPropsPanel);
+  state.canvas.on('object:added',       updateLayerList);
+  state.canvas.on('object:removed',     updateLayerList);
+  state.canvas.on('object:modified',    updateLayerList);
+  state.canvas.on('stack:changed',      updateLayerList);
+}
+
+initCanvas();
+
+/* ══════════════════════════════════════════════════════════════════
+   JERSEY BACKGROUND
+══════════════════════════════════════════════════════════════════ */
+function loadJersey(e) {
   const file = e.target.files[0];
   if (!file) return;
-  document.getElementById('jerseyFileName').textContent = file.name;
-  const img = new Image();
-  img.onload = () => {
-    if (state.currentView === 'front') {
-      state.jerseyImageFront = img;
-    } else {
-      state.jerseyImageBack = img;
+  const url = URL.createObjectURL(file);
+  fabric.Image.fromURL(url, img => {
+    // Scale to fit canvas nicely
+    const maxW = 700, maxH = 820;
+    const scaleX = maxW / img.width;
+    const scaleY = maxH / img.height;
+    const scale  = Math.min(scaleX, scaleY, 1);
+    const W = Math.round(img.width  * scale);
+    const H = Math.round(img.height * scale);
+
+    // Re-init canvas to jersey proportions
+    state.layerMeta.clear();
+    initCanvas(W, H);
+
+    fabric.Image.fromURL(url, jerseyImg => {
+      jerseyImg.scaleToWidth(W);
+      jerseyImg.set({ selectable: false, evented: false, hoverCursor: 'default' });
+      state.canvas.add(jerseyImg);
+      state.jerseyImg = jerseyImg;
+      document.getElementById('canvas-placeholder').style.opacity = '0';
+      updateLayerList();
+    });
+  });
+  e.target.value = '';
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ADD TEXT
+══════════════════════════════════════════════════════════════════ */
+function addText(isNumber = false) {
+  const input  = document.getElementById('new-text');
+  const raw    = input.value.trim();
+  const txt    = raw || (isNumber ? '10' : 'Текст');
+
+  const fSize  = isNumber ? 90 : 36;
+  const weight = isNumber ? 'bold' : 'normal';
+  const yPos   = state.canvas.height / 2;
+
+  const obj = new fabric.Text(txt, {
+    left:       state.canvas.width / 2,
+    top:        yPos,
+    originX:    'center',
+    originY:    'center',
+    fontSize:   fSize,
+    fontFamily: 'Inter',
+    fontWeight: weight,
+    fill:       '#ffffff',
+    opacity:    1,
+    angle:      0,
+  });
+
+  const id   = ++layerCounter;
+  const name = isNumber ? `Номер: ${txt}` : `Текст: ${txt}`;
+  state.layerMeta.set(obj, { id, type: 'text', name });
+
+  state.canvas.add(obj);
+  state.canvas.setActiveObject(obj);
+  state.canvas.renderAll();
+  if (raw) input.value = '';
+  updateLayerList();
+}
+
+function addNumber() {
+  const input = document.getElementById('new-text');
+  const prev  = input.value;
+  if (!prev.trim()) input.value = '10';
+  addText(true);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ADD LOGO/IMAGE
+══════════════════════════════════════════════════════════════════ */
+function addLogo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  fabric.Image.fromURL(url, img => {
+    const maxDim = Math.min(state.canvas.width, state.canvas.height) * 0.3;
+    if (img.width > maxDim || img.height > maxDim) {
+      img.scaleToWidth(maxDim);
     }
-    redraw();
-    showStatus('Image loaded for ' + state.currentView + ' view', 'success');
+    img.set({
+      left:    state.canvas.width  / 2,
+      top:     state.canvas.height / 2,
+      originX: 'center',
+      originY: 'center',
+    });
+    const id   = ++layerCounter;
+    state.layerMeta.set(img, { id, type: 'image', name: `Лого: ${file.name.split('.')[0]}` });
+    state.canvas.add(img);
+    state.canvas.setActiveObject(img);
+    state.canvas.renderAll();
+    updateLayerList();
+  });
+  e.target.value = '';
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CUSTOM FONTS
+══════════════════════════════════════════════════════════════════ */
+function loadFont(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const fontName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9\-_]/g, '_');
+    const url = URL.createObjectURL(file);
+    const fontFace = new FontFace(fontName, `url(${url})`);
+    fontFace.load().then(loaded => {
+      document.fonts.add(loaded);
+      state.customFonts.push({ name: file.name, family: fontName });
+      addFontOption(fontName);
+      addFontChip(fontName);
+      showToast(`Шрифт загружен: ${file.name}`);
+    }).catch(() => showToast('Ошибка загрузки шрифта'));
+  });
+  e.target.value = '';
+}
+
+function addFontOption(family) {
+  ['prop-font'].forEach(id => {
+    const sel = document.getElementById(id);
+    const opt = document.createElement('option');
+    opt.value = family;
+    opt.textContent = family;
+    sel.appendChild(opt);
+  });
+}
+
+function addFontChip(family) {
+  const wrap = document.getElementById('font-chips');
+  const chip = document.createElement('span');
+  chip.className = 'font-chip';
+  chip.dataset.family = family;
+  chip.innerHTML = `<span>${family}</span><button onclick="removeFont('${family}')">✕</button>`;
+  wrap.appendChild(chip);
+}
+
+function removeFont(family) {
+  // Remove from selects
+  document.querySelectorAll('#prop-font option').forEach(o => {
+    if (o.value === family) o.remove();
+  });
+  // Remove chip
+  document.querySelectorAll(`[data-family="${family}"]`).forEach(el => el.remove());
+  state.customFonts = state.customFonts.filter(f => f.family !== family);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PROPERTIES PANEL
+══════════════════════════════════════════════════════════════════ */
+function syncPropsPanel() {
+  const obj = state.canvas.getActiveObject();
+  if (!obj || obj.type === 'activeSelection') { clearPropsPanel(); return; }
+
+  document.getElementById('props-empty').style.display = 'none';
+  document.getElementById('props-panel').classList.add('visible');
+
+  const isText = obj.type === 'text' || obj.type === 'i-text';
+  document.getElementById('text-props').style.display = isText ? 'block' : 'none';
+
+  if (isText) {
+    document.getElementById('prop-text').value     = obj.text || '';
+    document.getElementById('prop-font').value     = obj.fontFamily || 'Inter';
+    document.getElementById('prop-fontsize').value = Math.round(obj.fontSize) || 36;
+    document.getElementById('prop-color').value    = obj.fill || '#ffffff';
+    document.getElementById('prop-weight').value   = obj.fontWeight || 'normal';
+  }
+
+  const op = obj.opacity ?? 1;
+  document.getElementById('prop-opacity').value     = op;
+  document.getElementById('prop-opacity-val').textContent = Math.round(op * 100) + '%';
+
+  const ang = Math.round(obj.angle ?? 0);
+  document.getElementById('prop-angle').value     = ang;
+  document.getElementById('prop-angle-val').textContent = ang + '°';
+}
+
+function clearPropsPanel() {
+  document.getElementById('props-empty').style.display = '';
+  document.getElementById('props-panel').classList.remove('visible');
+}
+
+function updateProp(prop) {
+  const obj = state.canvas.getActiveObject();
+  if (!obj) return;
+
+  if (prop === 'text') {
+    obj.set('text', document.getElementById('prop-text').value);
+    const meta = state.layerMeta.get(obj);
+    if (meta) meta.name = `Текст: ${obj.text.substring(0,20)}`;
+    updateLayerList();
+  } else if (prop === 'font') {
+    obj.set('fontFamily', document.getElementById('prop-font').value);
+  } else if (prop === 'fontSize') {
+    obj.set('fontSize', parseInt(document.getElementById('prop-fontsize').value) || 36);
+  } else if (prop === 'color') {
+    obj.set('fill', document.getElementById('prop-color').value);
+  } else if (prop === 'fontWeight') {
+    obj.set('fontWeight', document.getElementById('prop-weight').value);
+  } else if (prop === 'opacity') {
+    const val = parseFloat(document.getElementById('prop-opacity').value);
+    obj.set('opacity', val);
+    document.getElementById('prop-opacity-val').textContent = Math.round(val * 100) + '%';
+  } else if (prop === 'angle') {
+    const ang = parseInt(document.getElementById('prop-angle').value);
+    obj.set('angle', ang);
+    document.getElementById('prop-angle-val').textContent = ang + '°';
+  }
+
+  state.canvas.requestRenderAll();
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   LAYER LIST
+══════════════════════════════════════════════════════════════════ */
+function updateLayerList() {
+  const list = document.getElementById('layer-list');
+  const objects = state.canvas.getObjects();
+  // Filter out jersey background (non-selectable)
+  const layers = objects.filter(o => o.selectable !== false);
+
+  if (layers.length === 0) {
+    list.innerHTML = '<li class="empty-state">Слоёв пока нет</li>';
+    return;
+  }
+
+  const active = state.canvas.getActiveObject();
+  list.innerHTML = '';
+
+  // Reverse so top layers appear first
+  [...layers].reverse().forEach(obj => {
+    const meta = state.layerMeta.get(obj) || { type: 'unknown', name: 'Слой' };
+    const icon = meta.type === 'text' ? '📝' : meta.type === 'image' ? '🖼' : '◻';
+    const isActive = obj === active;
+
+    const li = document.createElement('li');
+    li.className = 'layer-item' + (isActive ? ' active' : '');
+    li.innerHTML = `
+      <span class="layer-icon">${icon}</span>
+      <span class="layer-name">${meta.name}</span>
+      <span class="layer-actions">
+        <button title="Вверх" onclick="moveLayerUp(event, this)">↑</button>
+        <button title="Вниз" onclick="moveLayerDown(event, this)">↓</button>
+        <button title="Удалить" class="del" onclick="removeLayerItem(event, this)">✕</button>
+      </span>`;
+
+    li.addEventListener('click', function(e) {
+      if (e.target.tagName === 'BUTTON') return;
+      state.canvas.setActiveObject(obj);
+      state.canvas.requestRenderAll();
+      syncPropsPanel();
+      updateLayerList();
+    });
+
+    // Store reference
+    li._fabricObj = obj;
+    li.dataset.idx = layers.indexOf(obj);
+    list.appendChild(li);
+  });
+}
+
+function moveLayerUp(e, btn) {
+  e.stopPropagation();
+  const obj = getObjFromBtn(btn);
+  if (obj) { state.canvas.bringForward(obj); state.canvas.requestRenderAll(); updateLayerList(); }
+}
+
+function moveLayerDown(e, btn) {
+  e.stopPropagation();
+  const obj = getObjFromBtn(btn);
+  if (obj) { state.canvas.sendBackwards(obj); state.canvas.requestRenderAll(); updateLayerList(); }
+}
+
+function removeLayerItem(e, btn) {
+  e.stopPropagation();
+  const obj = getObjFromBtn(btn);
+  if (obj) { state.canvas.remove(obj); state.layerMeta.delete(obj); updateLayerList(); clearPropsPanel(); }
+}
+
+function getObjFromBtn(btn) {
+  const li = btn.closest('.layer-item');
+  // Walk canvas objects to match
+  const layers = state.canvas.getObjects().filter(o => o.selectable !== false);
+  const name = li.querySelector('.layer-name').textContent;
+  // Match by layerMeta name
+  for (const [obj, meta] of state.layerMeta.entries()) {
+    if (meta.name === name && layers.includes(obj)) return obj;
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SELECTED OBJ CONTROLS
+══════════════════════════════════════════════════════════════════ */
+function deleteSelected() {
+  const obj = state.canvas.getActiveObject();
+  if (!obj) return;
+  state.canvas.remove(obj);
+  state.layerMeta.delete(obj);
+  clearPropsPanel();
+  updateLayerList();
+}
+
+function bringForward() {
+  const obj = state.canvas.getActiveObject();
+  if (obj) { state.canvas.bringForward(obj); state.canvas.requestRenderAll(); updateLayerList(); }
+}
+
+function sendBackward() {
+  const obj = state.canvas.getActiveObject();
+  if (obj) { state.canvas.sendBackwards(obj); state.canvas.requestRenderAll(); updateLayerList(); }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EXPORT — always composites watermark
+══════════════════════════════════════════════════════════════════ */
+function exportCanvas() {
+  // Deselect all first
+  state.canvas.discardActiveObject();
+  state.canvas.requestRenderAll();
+
+  const dataURL = state.canvas.toDataURL({ format: 'png', multiplier: 1 });
+
+  // Load watermark and composite
+  const wm = new Image();
+  wm.crossOrigin = 'anonymous';
+  wm.src = 'watermark.png';
+  wm.onload = function() {
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = state.canvas.width;
+    offscreen.height = state.canvas.height;
+    const ctx = offscreen.getContext('2d');
+
+    // Draw main canvas
+    const base = new Image();
+    base.onload = function() {
+      ctx.drawImage(base, 0, 0);
+
+      // Watermark: centered, max 40% width, 35% opacity
+      const wmMaxW  = offscreen.width  * 0.40;
+      const wmScale = Math.min(wmMaxW / wm.width, 1);
+      const wmW = wm.width  * wmScale;
+      const wmH = wm.height * wmScale;
+      const wmX = (offscreen.width  - wmW) / 2;
+      const wmY = (offscreen.height - wmH) / 2;
+
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(wm, wmX, wmY, wmW, wmH);
+      ctx.globalAlpha = 1;
+
+      // Download
+      offscreen.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'derby-ftbl-jersey.png';
+        a.click();
+        showToast('Изображение скачано!');
+      }, 'image/png');
+    };
+    base.src = dataURL;
   };
-  img.onerror = () => showStatus('Could not load image', 'error');
-  img.src = URL.createObjectURL(file);
-});
-
-document.getElementById('copyFrontBtn').addEventListener('click', () => {
-  if (!state.jerseyImageFront) { showStatus('No front image to copy', 'error'); return; }
-  state.jerseyImageBack = state.jerseyImageFront;
-  showStatus('Front image copied to back', 'success');
-});
-document.getElementById('copyBackBtn').addEventListener('click', () => {
-  if (!state.jerseyImageBack) { showStatus('No back image to copy', 'error'); return; }
-  state.jerseyImageFront = state.jerseyImageBack;
-  showStatus('Back image copied to front', 'success');
-});
-
-// ══════════════════════════════════════════════
-//  VIEW TABS
-// ══════════════════════════════════════════════
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.currentView = btn.dataset.view;
-    // Update jersey filename display
-    const img = state.currentView === 'front' ? state.jerseyImageFront : state.jerseyImageBack;
-    document.getElementById('jerseyFileName').textContent = img ? 'Image loaded' : 'No image loaded';
-    renderLayerList();
-    redraw();
-  });
-});
-
-// ══════════════════════════════════════════════
-//  CANVAS SIZE
-// ══════════════════════════════════════════════
-document.getElementById('canvasSize').addEventListener('change', function() {
-  const [w, h] = this.value.split('x').map(Number);
-  state.canvasW = w; state.canvasH = h;
-  canvas.width = w; canvas.height = h;
-  document.getElementById('propX').max = w;
-  document.getElementById('propY').max = h;
-  redraw();
-});
-
-// ══════════════════════════════════════════════
-//  ADD TEXT
-// ══════════════════════════════════════════════
-document.getElementById('addTextBtn').addEventListener('click', () => {
-  const raw = document.getElementById('textInput').value.trim();
-  if (!raw) { showStatus('Enter some text first', 'error'); return; }
-
-  const upper = document.getElementById('textUppercase').checked;
-  const text = upper ? raw.toUpperCase() : raw;
-  const size = +document.getElementById('fontSize').value;
-  const color = document.getElementById('textColor').value;
-  const strokeColor = document.getElementById('strokeColor').value;
-  const strokeWidth = +document.getElementById('strokeWidth').value;
-  const opacity = +document.getElementById('textOpacity').value;
-  const letterSpacing = +document.getElementById('letterSpacing').value;
-  const bold = document.getElementById('textBold').checked;
-  const italic = document.getElementById('textItalic').checked;
-  const shadow = document.getElementById('textShadow').checked;
-  const preset = document.getElementById('textPresetPos').value;
-
-  let x = state.canvasW / 2, y = state.canvasH / 2, align = 'center';
-  if (preset === 'front-center')  { x = state.canvasW/2; y = Math.round(state.canvasH*0.45); }
-  else if (preset === 'back-name')    { x = state.canvasW/2; y = Math.round(state.canvasH*0.24); }
-  else if (preset === 'back-number')  { x = state.canvasW/2; y = Math.round(state.canvasH*0.52); }
-  else if (preset === 'chest-left')   { x = Math.round(state.canvasW*0.28); y = Math.round(state.canvasH*0.30); align='left'; }
-
-  const layer = {
-    id: layerIdCounter++,
-    text, rawText: raw,
-    x, y, size, color, font: activeFontName,
-    strokeColor, strokeWidth,
-    opacity, letterSpacing, uppercase: upper,
-    bold, italic, shadow,
-    rotation: 0, align,
-    view: state.currentView,
+  wm.onerror = function() {
+    // Watermark not found — export without it but show warning
+    showToast('⚠ Файл watermark.png не найден');
+    const a = document.createElement('a');
+    a.href = dataURL;
+    a.download = 'derby-ftbl-jersey.png';
+    a.click();
   };
-
-  state.layers.push(layer);
-  selectLayer(layer.id);
-  renderLayerList();
-  redraw();
-  showStatus('Layer added!', 'success');
-});
-
-// ══════════════════════════════════════════════
-//  RANGE HELPERS
-// ══════════════════════════════════════════════
-function bindRange(id, valId, suffix, cb) {
-  const el = document.getElementById(id);
-  const vEl = document.getElementById(valId);
-  el.addEventListener('input', function() {
-    vEl.textContent = this.value + (suffix || '');
-    if (cb) cb(+this.value);
-  });
-}
-bindRange('fontSize', 'fontSizeVal');
-bindRange('strokeWidth', 'strokeWidthVal');
-bindRange('textOpacity', 'textOpacityVal');
-bindRange('letterSpacing', 'letterSpacingVal');
-bindRange('propX', 'propXVal', '', v => { const l=getLayer(state.selectedId); if(l){l.x=v;redraw();} });
-bindRange('propY', 'propYVal', '', v => { const l=getLayer(state.selectedId); if(l){l.y=v;redraw();} });
-bindRange('propRotation', 'propRotationVal', '°', v => { const l=getLayer(state.selectedId); if(l){l.rotation=v;redraw();} });
-bindRange('propSize', 'propSizeVal', '', v => { const l=getLayer(state.selectedId); if(l){l.size=v;redraw();} });
-bindRange('propStroke', 'propStrokeVal', '', v => { const l=getLayer(state.selectedId); if(l){l.strokeWidth=v;redraw();} });
-bindRange('propSpacing', 'propSpacingVal', '', v => { const l=getLayer(state.selectedId); if(l){l.letterSpacing=v;redraw();} });
-
-// Color swatches
-document.querySelectorAll('#colorSwatches .swatch').forEach(sw => {
-  sw.addEventListener('click', () => {
-    document.querySelectorAll('#colorSwatches .swatch').forEach(s => s.classList.remove('active'));
-    sw.classList.add('active');
-    document.getElementById('textColor').value = sw.dataset.color;
-  });
-});
-document.getElementById('textColor').addEventListener('input', () => {
-  document.querySelectorAll('#colorSwatches .swatch').forEach(s => s.classList.remove('active'));
-});
-
-// Per-selected-layer controls
-document.getElementById('editText').addEventListener('input', function() {
-  const l = getLayer(state.selectedId); if (!l) return;
-  l.rawText = this.value;
-  l.text = l.uppercase ? this.value.toUpperCase() : this.value;
-  renderLayerList(); redraw();
-});
-document.getElementById('propAlign').addEventListener('change', function() {
-  const l = getLayer(state.selectedId); if (!l) return; l.align = this.value; redraw();
-});
-document.getElementById('propFont').addEventListener('change', function() {
-  const l = getLayer(state.selectedId); if (!l) return; l.font = this.value; redraw();
-});
-document.getElementById('propColor').addEventListener('input', function() {
-  const l = getLayer(state.selectedId); if (!l) return; l.color = this.value; redraw();
-});
-document.getElementById('propStrokeColor').addEventListener('input', function() {
-  const l = getLayer(state.selectedId); if (!l) return; l.strokeColor = this.value; redraw();
-});
-
-['propBold','propItalic','propUpper','propShadow'].forEach(id => {
-  document.getElementById(id).addEventListener('change', function() {
-    const l = getLayer(state.selectedId); if (!l) return;
-    const map = {propBold:'bold',propItalic:'italic',propUpper:'uppercase',propShadow:'shadow'};
-    l[map[id]] = this.checked;
-    if (id === 'propUpper') l.text = this.checked ? l.rawText.toUpperCase() : l.rawText;
-    redraw();
-  });
-});
-
-document.getElementById('duplicateBtn').addEventListener('click', () => {
-  const l = getLayer(state.selectedId); if (!l) return;
-  const copy = { ...l, id: layerIdCounter++, x: l.x+20, y: l.y+20 };
-  state.layers.push(copy);
-  selectLayer(copy.id); renderLayerList(); redraw();
-  showStatus('Duplicated', 'success');
-});
-
-document.getElementById('deleteBtn').addEventListener('click', () => {
-  const id = state.selectedId; if (!id) return;
-  deleteLayer(id);
-  showStatus('Layer deleted');
-});
-
-// Background
-document.getElementById('bgTransparent').addEventListener('change', redraw);
-document.getElementById('bgColor').addEventListener('input', redraw);
-
-// ══════════════════════════════════════════════
-//  EXPORT
-// ══════════════════════════════════════════════
-document.getElementById('exportBtn').addEventListener('click', () => {
-  const prev = state.selectedId; state.selectedId = null; redraw();
-  const link = document.createElement('a');
-  link.download = `jersey_${state.currentView}_${Date.now()}.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-  state.selectedId = prev; redraw();
-  showStatus('Exported!', 'success');
-});
-
-document.getElementById('exportBothBtn').addEventListener('click', async () => {
-  const prevSel = state.selectedId; const prevView = state.currentView;
-  state.selectedId = null;
-  for (const view of ['front','back']) {
-    state.currentView = view; redraw();
-    await new Promise(r => setTimeout(r, 120));
-    const link = document.createElement('a');
-    link.download = `jersey_${view}_${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png'); link.click();
-    await new Promise(r => setTimeout(r, 300));
-  }
-  state.currentView = prevView; state.selectedId = prevSel; redraw();
-  showStatus('Both views exported!', 'success');
-});
-
-document.getElementById('clearAllBtn').addEventListener('click', () => {
-  if (!confirm('Clear all layers?')) return;
-  state.layers = []; state.selectedId = null;
-  hideProps(); renderLayerList(); redraw();
-  showStatus('Cleared');
-});
-
-// ══════════════════════════════════════════════
-//  DRAG & TOUCH
-// ══════════════════════════════════════════════
-canvas.addEventListener('mousedown', e => {
-  const rect = canvas.getBoundingClientRect();
-  const sx = canvas.width / rect.width;
-  const sy = canvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * sx;
-  const my = (e.clientY - rect.top) * sy;
-
-  const hit = [...state.layers].reverse().find(l => l.view === state.currentView && isHit(l, mx, my));
-  if (hit) {
-    selectLayer(hit.id);
-    state.dragging = true;
-    state.dragOffsetX = mx - hit.x;
-    state.dragOffsetY = my - hit.y;
-    canvas.style.cursor = 'grabbing';
-  } else {
-    state.selectedId = null;
-    hideProps(); redraw();
-  }
-});
-canvas.addEventListener('mousemove', e => {
-  if (!state.dragging || !state.selectedId) return;
-  const rect = canvas.getBoundingClientRect();
-  const sx = canvas.width / rect.width;
-  const sy = canvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * sx;
-  const my = (e.clientY - rect.top) * sy;
-  const l = getLayer(state.selectedId); if (!l) return;
-  l.x = mx - state.dragOffsetX;
-  l.y = my - state.dragOffsetY;
-  // sync sliders
-  document.getElementById('propX').value = Math.round(l.x);
-  document.getElementById('propXVal').textContent = Math.round(l.x);
-  document.getElementById('propY').value = Math.round(l.y);
-  document.getElementById('propYVal').textContent = Math.round(l.y);
-  redraw();
-});
-canvas.addEventListener('mouseup', () => { state.dragging = false; canvas.style.cursor = 'default'; });
-canvas.addEventListener('mouseleave', () => { state.dragging = false; });
-
-// Scroll to resize
-canvas.addEventListener('wheel', e => {
-  if (!state.selectedId) return;
-  e.preventDefault();
-  const l = getLayer(state.selectedId); if (!l) return;
-  l.size = Math.max(8, l.size - Math.sign(e.deltaY) * 2);
-  document.getElementById('propSize').value = l.size;
-  document.getElementById('propSizeVal').textContent = l.size;
-  redraw();
-}, { passive: false });
-
-// Touch
-canvas.addEventListener('touchstart', e => {
-  canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }));
-}, { passive: true });
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY }));
-}, { passive: false });
-canvas.addEventListener('touchend', () => { canvas.dispatchEvent(new MouseEvent('mouseup')); }, { passive: true });
-
-// Drag-and-drop on upload zones
-['jerseyUploadZone','fontUploadZone'].forEach(id => {
-  const zone = document.getElementById(id);
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('dragover');
-    const input = zone.querySelector('input[type=file]');
-    if (e.dataTransfer.files.length) {
-      const dt = new DataTransfer();
-      Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-      input.files = dt.files;
-      input.dispatchEvent(new Event('change'));
-    }
-  });
-});
-
-// ══════════════════════════════════════════════
-//  HELPERS
-// ══════════════════════════════════════════════
-function getLayer(id) { return state.layers.find(l => l.id === id); }
-
-function setFont(l) {
-  const w = l.bold ? 'bold ' : '';
-  const s = l.italic ? 'italic ' : '';
-  ctx.font = `${s}${w}${l.size}px "${l.font}", sans-serif`;
 }
 
-function measureTextWidth(l) {
-  setFont(l);
-  if (l.letterSpacing && l.letterSpacing !== 0) {
-    return [...l.text].reduce((a, ch) => a + ctx.measureText(ch).width + l.letterSpacing, 0);
-  }
-  return ctx.measureText(l.text).width;
+/* ══════════════════════════════════════════════════════════════════
+   SAVE / LOAD PROJECT
+══════════════════════════════════════════════════════════════════ */
+function saveProject() {
+  try {
+    const json = state.canvas.toJSON(['selectable', 'evented', 'hoverCursor']);
+    localStorage.setItem('derby_project', JSON.stringify(json));
+    localStorage.setItem('derby_canvas_size', JSON.stringify({
+      w: state.canvas.width, h: state.canvas.height
+    }));
+    showToast('Проект сохранён');
+  } catch(e) { showToast('Ошибка сохранения'); }
 }
 
-function drawTextSpaced(l) {
-  const chars = [...l.text];
-  let cx = l.x;
-  if (l.align === 'center') cx = l.x - measureTextWidth(l) / 2;
-  else if (l.align === 'right') cx = l.x - measureTextWidth(l);
-
-  chars.forEach(ch => {
-    if (l.strokeWidth > 0) ctx.strokeText(ch, cx, l.y);
-    ctx.fillText(ch, cx, l.y);
-    cx += ctx.measureText(ch).width + (l.letterSpacing || 0);
-  });
-}
-
-function isHit(l, mx, my) {
-  setFont(l);
-  const w = measureTextWidth(l);
-  const h = l.size;
-  let lx = l.align === 'center' ? l.x - w/2 : l.align === 'right' ? l.x - w : l.x;
-  return mx >= lx-10 && mx <= lx+w+10 && my >= l.y-h-6 && my <= l.y+10;
-}
-
-// ══════════════════════════════════════════════
-//  REDRAW
-// ══════════════════════════════════════════════
-function redraw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Background
-  const transparent = document.getElementById('bgTransparent').checked;
-  if (!transparent) {
-    ctx.fillStyle = document.getElementById('bgColor').value;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  } else {
-    const sz = 20;
-    for (let r = 0; r * sz < canvas.height; r++) {
-      for (let c = 0; c * sz < canvas.width; c++) {
-        ctx.fillStyle = (r+c)%2===0 ? '#2a2a3a' : '#1c1c28';
-        ctx.fillRect(c*sz, r*sz, sz, sz);
-      }
-    }
-  }
-
-  // Jersey image
-  const img = state.currentView === 'front' ? state.jerseyImageFront : state.jerseyImageBack;
-  if (img) {
-    const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
-    const dw = img.width * ratio, dh = img.height * ratio;
-    const dx = (canvas.width - dw) / 2, dy = (canvas.height - dh) / 2;
-    ctx.drawImage(img, dx, dy, dw, dh);
-  } else {
-    ctx.fillStyle = '#1c1c28';
-    ctx.fillRect(60, 60, canvas.width-120, canvas.height-120);
-    ctx.fillStyle = '#3a3a50';
-    ctx.font = 'bold 20px "DM Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Upload a jersey image', canvas.width/2, canvas.height/2 - 14);
-    ctx.font = '14px "DM Sans", sans-serif';
-    ctx.fillStyle = '#404058';
-    ctx.fillText('PNG with transparent background works best', canvas.width/2, canvas.height/2 + 14);
-    ctx.textAlign = 'left';
-  }
-
-  // Layers
-  state.layers.filter(l => l.view === state.currentView).forEach(l => {
-    ctx.save();
-    ctx.globalAlpha = l.opacity / 100;
-    ctx.translate(l.x, l.y);
-    if (l.rotation) ctx.rotate(l.rotation * Math.PI / 180);
-    ctx.translate(-l.x, -l.y);
-
-    setFont(l);
-    ctx.textBaseline = 'alphabetic';
-
-    // Shadow
-    if (l.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.7)';
-      ctx.shadowBlur = Math.round(l.size * 0.08);
-      ctx.shadowOffsetX = Math.round(l.size * 0.03);
-      ctx.shadowOffsetY = Math.round(l.size * 0.03);
-    }
-
-    // Stroke
-    if (l.strokeWidth > 0) {
-      ctx.strokeStyle = l.strokeColor;
-      ctx.lineWidth = l.strokeWidth * 2;
-      ctx.lineJoin = 'round';
-    }
-    ctx.fillStyle = l.color;
-
-    drawTextSpaced(l);
-    ctx.shadowColor = 'transparent';
-
-    // Selection box
-    if (l.id === state.selectedId) {
-      const w = measureTextWidth(l);
-      const h = l.size;
-      let lx = l.align === 'center' ? l.x - w/2 : l.align === 'right' ? l.x - w : l.x;
-      ctx.restore(); ctx.save();
-      ctx.strokeStyle = '#f5a623';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5,4]);
-      ctx.strokeRect(lx-6, l.y-h-4, w+12, h+12);
-      ctx.setLineDash([]);
-      ctx.fillStyle = '#f5a623';
-      [[lx-6,l.y-h-4],[lx+w+6,l.y-h-4],[lx-6,l.y+8],[lx+w+6,l.y+8]].forEach(([hx,hy]) => {
-        ctx.beginPath(); ctx.arc(hx,hy,4,0,Math.PI*2); ctx.fill();
+function loadProject() {
+  const raw = localStorage.getItem('derby_project');
+  if (!raw) { showToast('Нет сохранённого проекта'); return; }
+  try {
+    const json = JSON.parse(raw);
+    const size = JSON.parse(localStorage.getItem('derby_canvas_size') || '{"w":600,"h":700}');
+    state.layerMeta.clear();
+    initCanvas(size.w, size.h);
+    state.canvas.loadFromJSON(json, () => {
+      state.canvas.requestRenderAll();
+      // Rebuild layerMeta for loaded objects
+      state.canvas.getObjects().forEach(obj => {
+        if (obj.selectable === false) return;
+        const id   = ++layerCounter;
+        const type = (obj.type === 'text' || obj.type === 'i-text') ? 'text' : 'image';
+        const name = type === 'text' ? `Текст: ${obj.text?.substring(0, 20)}` : 'Изображение';
+        state.layerMeta.set(obj, { id, type, name });
       });
-    }
-    ctx.restore();
-  });
+      updateLayerList();
+      document.getElementById('canvas-placeholder').style.opacity = '0';
+      showToast('Проект загружен');
+    });
+  } catch(e) { showToast('Ошибка загрузки проекта'); }
 }
 
-// ══════════════════════════════════════════════
-//  LAYER LIST
-// ══════════════════════════════════════════════
-function renderLayerList() {
-  const list = document.getElementById('layerList');
-  const empty = document.getElementById('emptyLayers');
-  const viewLayers = state.layers.filter(l => l.view === state.currentView);
-  if (!viewLayers.length) { list.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display = 'none';
-  list.innerHTML = [...viewLayers].reverse().map(l => `
-    <div class="layer-item ${l.id===state.selectedId?'selected':''}" data-id="${l.id}">
-      <div>
-        <div class="layer-label" style="color:${l.color};text-shadow:0 0 4px rgba(0,0,0,0.8)">${l.text.substring(0,16)}${l.text.length>16?'…':''}</div>
-        <div class="layer-sub">${l.font.replace('Custom_','').replace(/_\d+$/,'')} · ${l.size}px</div>
-      </div>
-      <button class="layer-del" data-del="${l.id}">✕</button>
-    </div>
-  `).join('');
-  list.querySelectorAll('.layer-item').forEach(item => {
-    item.addEventListener('click', e => { if (e.target.dataset.del) return; selectLayer(+item.dataset.id); });
-  });
-  list.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); deleteLayer(+btn.dataset.del); });
-  });
+/* ══════════════════════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-function selectLayer(id) {
-  state.selectedId = id;
-  const l = getLayer(id); if (!l) return;
-  document.getElementById('selectedProps').style.display = '';
-
-  document.getElementById('editText').value = l.rawText;
-  document.getElementById('propFont').value = l.font;
-  document.getElementById('propSize').value = l.size;
-  document.getElementById('propSizeVal').textContent = l.size;
-  document.getElementById('propColor').value = l.color;
-  document.getElementById('propStrokeColor').value = l.strokeColor;
-  document.getElementById('propStroke').value = l.strokeWidth;
-  document.getElementById('propStrokeVal').textContent = l.strokeWidth;
-  document.getElementById('propX').value = Math.round(l.x);
-  document.getElementById('propXVal').textContent = Math.round(l.x);
-  document.getElementById('propY').value = Math.round(l.y);
-  document.getElementById('propYVal').textContent = Math.round(l.y);
-  document.getElementById('propRotation').value = l.rotation || 0;
-  document.getElementById('propRotationVal').textContent = (l.rotation||0) + '°';
-  document.getElementById('propSpacing').value = l.letterSpacing || 0;
-  document.getElementById('propSpacingVal').textContent = l.letterSpacing || 0;
-  document.getElementById('propAlign').value = l.align;
-  document.getElementById('propBold').checked = l.bold;
-  document.getElementById('propItalic').checked = l.italic;
-  document.getElementById('propUpper').checked = l.uppercase;
-  document.getElementById('propShadow').checked = l.shadow;
-
-  renderLayerList(); redraw();
-}
-
-function deleteLayer(id) {
-  state.layers = state.layers.filter(l => l.id !== id);
-  if (state.selectedId === id) { state.selectedId = null; hideProps(); }
-  renderLayerList(); redraw();
-}
-
-function hideProps() {
-  document.getElementById('selectedProps').style.display = 'none';
-}
-
-// ══════════════════════════════════════════════
-//  STATUS
-// ══════════════════════════════════════════════
-let statusTimer;
-function showStatus(msg, type) {
-  const el = document.getElementById('statusMsg');
-  el.textContent = msg;
-  el.className = type ? 'show ' + type : 'show';
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => el.className = '', 2400);
-}
-
-// ══════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════
-renderFontLibrary();
-rebuildFontSelects();
-redraw();
-renderLayerList();
+/* ══════════════════════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+══════════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+  if (e.key === 'Escape') { state.canvas.discardActiveObject(); state.canvas.requestRenderAll(); }
+});
 </script>
 </body>
 </html>
