@@ -1,1140 +1,983 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Derby FTBL — Конструктор формы</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-  <style>
-    /* ─── TOKENS ─────────────────────────────────────────────────── */
-    :root {
-      --bg:         #080808;
-      --panel:      #101010;
-      --panel2:     #161616;
-      --border:     #252525;
-      --border2:    #1e1e1e;
-      --accent:     #c8f135;
-      --accent2:    #9abf1a;
-      --text:       #f0f0f0;
-      --text-muted: #666;
-      --text-dim:   #999;
-      --danger:     #e05252;
-      --panel-w:    260px;
-      --header-h:   52px;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Derby FTBL — Конструктор формы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<style>
+/* ── TOKENS ──────────────────────────────────────── */
+:root {
+  --bg:       #080808;
+  --panel:    #101010;
+  --panel2:   #161616;
+  --panel3:   #1c1c1c;
+  --border:   #252525;
+  --border2:  #1e1e1e;
+  --accent:   #c8f135;
+  --accent2:  #9abf1a;
+  --text:     #f0f0f0;
+  --muted:    #666;
+  --dim:      #999;
+  --danger:   #e05252;
+  --lw:       256px;
+  --rw:       264px;
+  --hh:       52px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.4}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}
 
-    /* ─── RESET ──────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; }
+/* ── LAYOUT ──────────────────────────────────────── */
+#app{display:grid;grid-template-rows:var(--hh) 1fr;grid-template-columns:var(--lw) 1fr var(--rw);height:100vh}
 
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 13px;
-      line-height: 1.4;
-    }
+/* ── HEADER ──────────────────────────────────────── */
+#header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:900;font-size:15px;letter-spacing:-.3px}
+.logo-mark{background:var(--accent);color:#000;font-size:11px;font-weight:800;padding:2px 7px;border-radius:3px;letter-spacing:.5px}
+.tagline{font-size:11px;color:var(--muted)}
+#header-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+/* export quality selector */
+#export-quality{background:var(--panel2);border:1px solid var(--border);color:var(--dim);border-radius:4px;padding:5px 8px;font-family:inherit;font-size:11px;cursor:pointer;outline:none}
+#export-quality:focus{border-color:rgba(200,241,53,.3)}
 
-    /* ─── SCROLLBAR ──────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+/* ── PANELS ──────────────────────────────────────── */
+#left-panel,#right-panel{background:var(--panel);overflow-y:auto;overflow-x:hidden}
+#left-panel{border-right:1px solid var(--border)}
+#right-panel{border-left:1px solid var(--border)}
 
-    /* ─── LAYOUT ─────────────────────────────────────────────────── */
-    #app {
-      display: grid;
-      grid-template-rows: var(--header-h) 1fr;
-      grid-template-columns: var(--panel-w) 1fr var(--panel-w);
-      height: 100vh;
-    }
+/* ── CANVAS ──────────────────────────────────────── */
+#canvas-area{background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+#canvas-wrap{position:relative;box-shadow:0 0 80px rgba(200,241,53,.04),0 0 0 1px rgba(200,241,53,.06);border-radius:2px}
+#canvas-wrap canvas{display:block}
+#canvas-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);pointer-events:none;transition:opacity .3s}
+#canvas-placeholder p{font-size:13px}
+#canvas-placeholder .hint{font-size:11px;color:#444}
 
-    /* ─── HEADER ─────────────────────────────────────────────────── */
-    #header {
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0 20px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-      position: relative;
-    }
+/* ── SECTION HEAD ────────────────────────────────── */
+.sh{padding:9px 14px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border2);position:sticky;top:0;background:var(--panel);z-index:2}
+.sb{padding:10px 12px}
+.sb+.sh{margin-top:2px}
 
-    #header .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 900;
-      font-size: 15px;
-      letter-spacing: -0.3px;
-    }
+/* ── BUTTONS ─────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 12px;border-radius:4px;border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:background .15s,opacity .15s;white-space:nowrap;line-height:1}
+.btn-primary{background:var(--accent);color:#000}.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:transparent;color:var(--dim);border:1px solid var(--border)}.btn-ghost:hover{background:var(--panel2);color:var(--text)}
+.btn-panel{background:var(--panel2);color:var(--dim);border:1px solid var(--border2);width:100%;margin-bottom:5px}.btn-panel:hover{background:var(--panel3);color:var(--text)}
+.btn-download{background:var(--accent);color:#000;padding:8px 18px;font-size:13px}.btn-download:hover{background:var(--accent2)}
+.btn-row{display:flex;gap:6px;margin-bottom:4px}.btn-row .btn{flex:1}
+.btn-danger{color:var(--danger)!important;border-color:#2d1a1a!important}
 
-    #header .logo-mark {
-      background: var(--accent);
-      color: #000;
-      font-size: 11px;
-      font-weight: 800;
-      padding: 2px 7px;
-      border-radius: 3px;
-      letter-spacing: 0.5px;
-    }
+/* ── FORM ────────────────────────────────────────── */
+.fg{margin-bottom:9px}
+.fg label{display:block;font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.fi,.fs{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 9px;font-family:inherit;font-size:12px;outline:none;transition:border-color .15s}
+.fi:focus,.fs:focus{border-color:rgba(200,241,53,.4)}
+.fs{cursor:pointer}.fs option{background:#161616}
+.fr{display:flex;gap:6px}.fr .fg{flex:1}
+input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-radius:4px;width:100%;height:30px;padding:2px 4px;background:var(--panel2);cursor:pointer}
+input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;margin:4px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--accent);border-radius:50%;cursor:pointer}
+.rr{display:flex;align-items:center;gap:8px}.rr input{flex:1}
+.rv{font-size:11px;color:var(--dim);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
 
-    #header .tagline {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 400;
-    }
+/* ── UPLOAD ZONE ─────────────────────────────────── */
+.uz{border:1px dashed var(--border);border-radius:4px;padding:12px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;color:var(--muted);font-size:12px}
+.uz:hover{border-color:var(--accent);background:rgba(200,241,53,.03);color:var(--text)}
+.uz .ico{font-size:18px;margin-bottom:3px;opacity:.5}
+input[type=file]{display:none}
 
-    #header-actions {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+/* ── LAYER LIST ──────────────────────────────────── */
+#layer-list{list-style:none}
+.li{display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .1s;user-select:none}
+.li:hover{background:var(--panel2)}
+.li.active{background:rgba(200,241,53,.06);border-left:2px solid var(--accent);padding-left:10px}
+.li-icon{font-size:11px;width:18px;text-align:center;flex-shrink:0;opacity:.7}
+.li-name{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li-acts{display:flex;gap:1px;flex-shrink:0}
+.li-acts button{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 4px;font-size:12px;border-radius:3px;transition:color .1s;line-height:1}
+.li-acts button:hover{color:var(--text)}.li-acts button.del:hover{color:var(--danger)}
+.empty-state{padding:18px 14px;text-align:center;color:var(--muted);font-size:12px}
 
-    /* ─── PANELS ─────────────────────────────────────────────────── */
-    #left-panel, #right-panel {
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-    #right-panel { border-right: none; border-left: 1px solid var(--border); }
+/* ── RIGHT PANEL TOGGLE SECTION ──────────────────── */
+.tgl-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.tgl-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.tgl{position:relative;width:32px;height:18px;flex-shrink:0}
+.tgl input{opacity:0;width:0;height:0}
+.tgl-slider{position:absolute;inset:0;background:#2a2a2a;border-radius:9px;cursor:pointer;transition:background .2s}
+.tgl-slider:before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;background:#555;border-radius:50%;transition:transform .2s,background .2s}
+.tgl input:checked+.tgl-slider{background:rgba(200,241,53,.25)}
+.tgl input:checked+.tgl-slider:before{transform:translateX(14px);background:var(--accent)}
 
-    /* ─── CANVAS AREA ────────────────────────────────────────────── */
-    #canvas-area {
-      background: var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-    }
+/* ── PROPS EMPTY ─────────────────────────────────── */
+#props-empty{padding:24px 14px;text-align:center;color:var(--muted);font-size:12px}
+#props-panel{display:none}
+#props-panel.visible{display:block}
 
-    #canvas-wrap {
-      position: relative;
-      border: 1px solid #1f1f1f;
-      box-shadow: 0 0 60px rgba(200, 241, 53, 0.04), 0 0 0 1px rgba(200,241,53,0.05);
-      border-radius: 2px;
-    }
+/* ── FONT CHIPS ──────────────────────────────────── */
+.fc{display:inline-flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;padding:2px 6px;font-size:11px;color:var(--dim);margin:2px}
+.fc button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 1px;line-height:1}.fc button:hover{color:var(--danger)}
+#font-chips{flex-wrap:wrap;display:flex;margin-top:6px;min-height:8px}
 
-    #canvas-wrap canvas { display: block; }
+/* ── GALLERY MODAL ───────────────────────────────── */
+#gallery-modal{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:none;flex-direction:column}
+#gallery-modal.open{display:flex}
+#gm-header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+#gm-header h2{font-size:14px;font-weight:700;margin-right:auto}
+#gm-search{background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:7px 12px;font-family:inherit;font-size:13px;outline:none;width:260px}
+#gm-search:focus{border-color:rgba(200,241,53,.4)}
+#gm-cats{display:flex;gap:6px;flex-wrap:wrap}
+.cat-btn{background:var(--panel2);border:1px solid var(--border);color:var(--dim);border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;transition:all .15s}
+.cat-btn:hover,.cat-btn.active{background:rgba(200,241,53,.1);border-color:var(--accent);color:var(--accent)}
+#gm-body{flex:1;overflow-y:auto;padding:20px}
+#gm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.gm-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s}
+.gm-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.gm-card img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:var(--panel2)}
+.gm-card .gm-name{padding:7px 10px;font-size:11px;color:var(--dim)}
+.gm-empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 20px}
+.gm-empty code{background:var(--panel2);padding:2px 6px;border-radius:3px;font-size:12px;color:var(--dim)}
 
-    #canvas-placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      color: var(--text-muted);
-      pointer-events: none;
-      transition: opacity 0.3s;
-    }
+/* ── SEPARATOR ───────────────────────────────────── */
+hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
 
-    #canvas-placeholder svg { opacity: 0.3; }
-    #canvas-placeholder p { font-size: 13px; }
-    #canvas-placeholder .hint { font-size: 11px; color: #444; }
+/* ── TOAST ───────────────────────────────────────── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:#1c1c1c;border:1px solid #2f2f2f;color:var(--text);padding:8px 16px;border-radius:5px;font-size:12px;transition:transform .25s ease;z-index:1000;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#toast.show{transform:translateX(-50%) translateY(0)}
 
-    /* ─── SECTION HEADER ─────────────────────────────────────────── */
-    .section-head {
-      padding: 10px 14px 8px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border2);
-      position: sticky;
-      top: 0;
-      background: var(--panel);
-      z-index: 1;
-    }
-
-    .section-body { padding: 10px 12px; }
-    .section-body + .section-head { margin-top: 4px; }
-
-    /* ─── BUTTONS ─────────────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 7px 12px;
-      border-radius: 4px;
-      border: none;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      transition: background 0.15s, opacity 0.15s;
-      white-space: nowrap;
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-    }
-    .btn-primary:hover { background: var(--accent2); }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--text-dim);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover { background: var(--panel2); color: var(--text); border-color: #333; }
-
-    .btn-panel {
-      background: var(--panel2);
-      color: var(--text-dim);
-      border: 1px solid var(--border2);
-      width: 100%;
-    }
-    .btn-panel:hover { background: #1f1f1f; color: var(--text); }
-
-    .btn-icon {
-      padding: 6px;
-      background: var(--panel2);
-      color: var(--text-dim);
-      border: 1px solid var(--border2);
-      border-radius: 4px;
-      line-height: 1;
-    }
-    .btn-icon:hover { color: var(--text); background: #1e1e1e; }
-    .btn-icon.danger:hover { color: var(--danger); }
-
-    .btn-accent-ghost {
-      background: transparent;
-      color: var(--accent);
-      border: 1px solid rgba(200,241,53,0.25);
-    }
-    .btn-accent-ghost:hover { background: rgba(200,241,53,0.07); }
-
-    .btn-download {
-      background: var(--accent);
-      color: #000;
-      padding: 8px 18px;
-      font-size: 13px;
-    }
-    .btn-download:hover { background: var(--accent2); }
-
-    .btn-row { display: flex; gap: 6px; margin-bottom: 6px; }
-    .btn-row .btn { flex: 1; }
-
-    /* ─── FORM CONTROLS ───────────────────────────────────────────── */
-    .form-group { margin-bottom: 10px; }
-    .form-group label {
-      display: block;
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .form-input, .form-select, .form-textarea {
-      width: 100%;
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 4px;
-      padding: 6px 9px;
-      font-family: inherit;
-      font-size: 12px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .form-input:focus, .form-select:focus { border-color: rgba(200,241,53,0.4); }
-    .form-select { cursor: pointer; }
-    .form-select option { background: #161616; }
-
-    .form-row { display: flex; gap: 6px; }
-    .form-row .form-group { flex: 1; }
-
-    /* Color input special */
-    input[type="color"] {
-      -webkit-appearance: none;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      width: 100%;
-      height: 30px;
-      padding: 2px 4px;
-      background: var(--panel2);
-      cursor: pointer;
-    }
-    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
-
-    /* Range input */
-    input[type="range"] {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 3px;
-      background: var(--border);
-      border-radius: 2px;
-      outline: none;
-      margin: 4px 0;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      background: var(--accent);
-      border-radius: 50%;
-      cursor: pointer;
-    }
-
-    .range-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .range-row input[type="range"] { flex: 1; }
-    .range-val {
-      font-size: 11px;
-      color: var(--text-dim);
-      min-width: 28px;
-      text-align: right;
-    }
-
-    /* ─── LAYER LIST ─────────────────────────────────────────────── */
-    #layer-list { list-style: none; }
-
-    .layer-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-bottom: 1px solid var(--border2);
-      cursor: pointer;
-      transition: background 0.1s;
-      user-select: none;
-    }
-    .layer-item:hover { background: var(--panel2); }
-    .layer-item.active { background: rgba(200,241,53,0.06); border-left: 2px solid var(--accent); padding-left: 10px; }
-
-    .layer-icon {
-      font-size: 11px;
-      width: 18px;
-      text-align: center;
-      flex-shrink: 0;
-      opacity: 0.7;
-    }
-
-    .layer-name {
-      flex: 1;
-      font-size: 12px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .layer-actions { display: flex; gap: 2px; flex-shrink: 0; }
-    .layer-actions button {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 2px 4px;
-      font-size: 13px;
-      border-radius: 3px;
-      transition: color 0.1s;
-    }
-    .layer-actions button:hover { color: var(--text); }
-    .layer-actions button.del:hover { color: var(--danger); }
-
-    /* ─── EMPTY STATE ────────────────────────────────────────────── */
-    .empty-state {
-      padding: 20px 14px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    /* ─── PROPS PANEL ────────────────────────────────────────────── */
-    #props-empty {
-      padding: 24px 14px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-    #props-panel { display: none; }
-    #props-panel.visible { display: block; }
-
-    /* ─── UPLOAD ZONE ────────────────────────────────────────────── */
-    .upload-zone {
-      border: 1px dashed var(--border);
-      border-radius: 4px;
-      padding: 14px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-    .upload-zone:hover { border-color: var(--accent); background: rgba(200,241,53,0.03); color: var(--text); }
-    .upload-zone .ico { font-size: 20px; margin-bottom: 4px; opacity: 0.5; }
-
-    input[type="file"] { display: none; }
-
-    /* ─── TOAST ──────────────────────────────────────────────────── */
-    #toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(60px);
-      background: #1a1a1a;
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px 16px;
-      border-radius: 5px;
-      font-size: 12px;
-      transition: transform 0.25s ease;
-      z-index: 1000;
-      pointer-events: none;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-    }
-    #toast.show { transform: translateX(-50%) translateY(0); }
-
-    /* ─── MOBILE TOGGLE ──────────────────────────────────────────── */
-    .panel-toggle-btn {
-      display: none;
-      position: fixed;
-      bottom: 16px;
-      z-index: 100;
-      background: var(--accent);
-      color: #000;
-      border: none;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      font-size: 18px;
-      cursor: pointer;
-    }
-
-    /* ─── DIVIDER ────────────────────────────────────────────────── */
-    .divider { border: none; border-top: 1px solid var(--border2); margin: 6px 0; }
-
-    /* ─── RESPONSIVE ─────────────────────────────────────────────── */
-    @media (max-width: 900px) {
-      #app {
-        grid-template-columns: 240px 1fr;
-        grid-template-rows: var(--header-h) 1fr;
-      }
-      #right-panel {
-        display: none;
-        position: fixed;
-        right: 0;
-        top: var(--header-h);
-        bottom: 0;
-        width: 240px;
-        z-index: 50;
-        border-left: 1px solid var(--border);
-      }
-      #right-panel.open { display: block; }
-      .panel-toggle-btn { display: flex; align-items: center; justify-content: center; right: 16px; }
-    }
-
-    @media (max-width: 640px) {
-      #app { grid-template-columns: 1fr; }
-      #left-panel {
-        display: none;
-        position: fixed;
-        left: 0;
-        top: var(--header-h);
-        bottom: 0;
-        width: 240px;
-        z-index: 50;
-        border-right: 1px solid var(--border);
-      }
-      #left-panel.open { display: block; }
-    }
-
-    /* ─── FONT CHIPS ─────────────────────────────────────────────── */
-    .font-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      background: var(--panel2);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      padding: 2px 6px;
-      font-size: 11px;
-      color: var(--text-dim);
-      margin: 2px;
-    }
-    .font-chip button {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 12px;
-      padding: 0 1px;
-      line-height: 1;
-    }
-    .font-chip button:hover { color: var(--danger); }
-    #font-chips { flex-wrap: wrap; display: flex; margin-top: 6px; min-height: 10px; }
-  </style>
+/* ── RESPONSIVE ──────────────────────────────────── */
+@media(max-width:900px){
+  #app{grid-template-columns:240px 1fr}
+  #right-panel{display:none;position:fixed;right:0;top:var(--hh);bottom:0;width:240px;z-index:50}
+  #right-panel.open{display:block}
+  #fab-props{display:flex}
+}
+#fab-props{display:none;position:fixed;bottom:16px;right:16px;z-index:100;background:var(--accent);color:#000;border:none;border-radius:50%;width:42px;height:42px;font-size:20px;cursor:pointer;align-items:center;justify-content:center}
+@media(max-width:600px){
+  #app{grid-template-columns:1fr}
+  #left-panel{display:none;position:fixed;left:0;top:var(--hh);bottom:0;width:240px;z-index:50}
+  #left-panel.open{display:block}
+  #fab-left{display:flex}
+}
+#fab-left{display:none;position:fixed;bottom:16px;left:16px;z-index:100;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;align-items:center;justify-content:center}
+</style>
 </head>
 <body>
 <div id="app">
 
-  <!-- ══ HEADER ══════════════════════════════════════════════════ -->
-  <header id="header">
-    <div class="logo">
-      <span class="logo-mark">DERBY</span>
-      <span>Конструктор формы</span>
+<!-- ══ HEADER ══════════════════════════════════════ -->
+<header id="header">
+  <div class="logo">
+    <span class="logo-mark">DERBY</span>
+    <span>Конструктор формы</span>
+  </div>
+  <span class="tagline">Atyrau, Kazakhstan</span>
+  <div id="header-right">
+    <select id="export-quality" title="Качество экспорта">
+      <option value="1">1× быстро</option>
+      <option value="2" selected>2× хорошо</option>
+      <option value="3">3× макс</option>
+    </select>
+    <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
+    <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
+    <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
+  </div>
+</header>
+
+<!-- ══ LEFT PANEL ══════════════════════════════════ -->
+<aside id="left-panel">
+
+  <div class="sh">Форма</div>
+  <div class="sb">
+    <label for="file-jersey" class="uz">
+      <div class="ico">👕</div>
+      <div>Загрузить свою форму</div>
+      <div style="font-size:10px;margin-top:2px;color:#444">PNG / JPG / WEBP</div>
+    </label>
+    <input type="file" id="file-jersey" accept="image/png,image/jpeg,image/webp" onchange="loadJersey(event)">
+    <button class="btn btn-panel" style="margin-top:6px" onclick="openGallery()">🗂 Выбрать из галереи</button>
+  </div>
+
+  <div class="sh">Добавить слой</div>
+  <div class="sb">
+    <div class="fg">
+      <label>Текст / Имя / Номер</label>
+      <input class="fi" id="new-text" placeholder="Напишите текст..." onkeydown="if(event.key==='Enter')addText()">
     </div>
-    <span class="tagline">Atyrau, Kazakhstan</span>
-    <div id="header-actions">
-      <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
-      <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
-      <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
+    <div class="btn-row">
+      <button class="btn btn-panel" onclick="addText()">＋ Текст</button>
+      <button class="btn btn-panel" onclick="addNumber()">＃ Номер</button>
     </div>
-  </header>
+    <label for="file-logo" class="uz">
+      <div class="ico">🏅</div>
+      <div>Загрузить логотип / эмблему</div>
+      <div style="font-size:10px;margin-top:2px;color:#444">PNG / JPG / SVG</div>
+    </label>
+    <input type="file" id="file-logo" accept="image/*" onchange="addLogo(event)">
+  </div>
 
-  <!-- ══ LEFT PANEL ═══════════════════════════════════════════════ -->
-  <aside id="left-panel">
+  <div class="sh">Шрифты</div>
+  <div class="sb">
+    <label for="file-font" class="uz">
+      <div class="ico">🔤</div>
+      <div>Загрузить шрифт</div>
+      <div style="font-size:10px;margin-top:2px;color:#444">TTF / OTF / WOFF</div>
+    </label>
+    <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" multiple onchange="loadFontFile(event)">
+    <div id="font-chips"></div>
+  </div>
 
-    <!-- Jersey upload -->
-    <div class="section-head">Фон — Форма</div>
-    <div class="section-body">
-      <label for="file-jersey" class="upload-zone">
-        <div class="ico">👕</div>
-        <div>Загрузить изображение формы</div>
-        <div style="font-size:10px;margin-top:3px;color:#444">PNG / JPG</div>
-      </label>
-      <input type="file" id="file-jersey" accept="image/png,image/jpeg,image/webp" onchange="loadJersey(event)" />
+  <div class="sh">Слои</div>
+  <ul id="layer-list">
+    <li class="empty-state">Слоёв пока нет</li>
+  </ul>
+
+</aside>
+
+<!-- ══ CANVAS AREA ══════════════════════════════════ -->
+<main id="canvas-area">
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="canvas-placeholder">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/></svg>
+      <p>Загрузите форму или выберите из галереи</p>
+      <p class="hint">Панель слева</p>
     </div>
+  </div>
+</main>
 
-    <!-- Add text -->
-    <div class="section-head">Текст</div>
-    <div class="section-body">
-      <div class="form-group">
-        <label>Текст</label>
-        <input class="form-input" id="new-text" placeholder="Имя игрока, спонсор..." />
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-panel" onclick="addText()">＋ Добавить текст</button>
-        <button class="btn btn-panel" onclick="addNumber()">＃ Номер</button>
-      </div>
-    </div>
+<!-- ══ RIGHT PANEL ══════════════════════════════════ -->
+<aside id="right-panel">
 
-    <!-- Add logo -->
-    <div class="section-head">Логотип / Изображение</div>
-    <div class="section-body">
-      <label for="file-logo" class="upload-zone">
-        <div class="ico">🏅</div>
-        <div>Загрузить логотип</div>
-        <div style="font-size:10px;margin-top:3px;color:#444">PNG / JPG / SVG</div>
-      </label>
-      <input type="file" id="file-logo" accept="image/*" onchange="addLogo(event)" />
-    </div>
+  <div class="sh">Свойства слоя</div>
+  <div id="props-empty" class="empty-state">Выберите слой на холсте</div>
 
-    <!-- Custom fonts -->
-    <div class="section-head">Шрифты</div>
-    <div class="section-body">
-      <label for="file-font" class="upload-zone">
-        <div class="ico">🔤</div>
-        <div>Загрузить шрифт</div>
-        <div style="font-size:10px;margin-top:3px;color:#444">TTF / OTF / WOFF</div>
-      </label>
-      <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" multiple onchange="loadFont(event)" />
-      <div id="font-chips"></div>
-    </div>
+  <div id="props-panel">
 
-    <!-- Layers -->
-    <div class="section-head">Слои</div>
-    <ul id="layer-list">
-      <li class="empty-state">Слоёв пока нет</li>
-    </ul>
-
-  </aside>
-
-  <!-- ══ CANVAS AREA ═══════════════════════════════════════════════ -->
-  <main id="canvas-area">
-    <div id="canvas-wrap">
-      <canvas id="c"></canvas>
-      <div id="canvas-placeholder">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/>
-        </svg>
-        <p>Загрузите изображение формы</p>
-        <p class="hint">Используйте панель слева</p>
-      </div>
-    </div>
-  </main>
-
-  <!-- ══ RIGHT PANEL ═══════════════════════════════════════════════ -->
-  <aside id="right-panel">
-    <div class="section-head">Свойства слоя</div>
-
-    <div id="props-empty" class="empty-state">
-      Выберите слой для редактирования
-    </div>
-
-    <div id="props-panel">
-
-      <!-- Text props -->
-      <div id="text-props">
-        <div class="section-body">
-          <div class="form-group">
-            <label>Текст</label>
-            <input class="form-input" id="prop-text" oninput="updateProp('text')" />
+    <!-- TEXT props -->
+    <div id="text-props" style="display:none">
+      <div class="sb">
+        <div class="fg">
+          <label>Текст</label>
+          <input class="fi" id="prop-text" oninput="updateProp('text')">
+        </div>
+        <div class="fg">
+          <label>Шрифт</label>
+          <select class="fs" id="prop-font" onchange="updateProp('font')">
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Impact">Impact</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+        </div>
+        <div class="fr">
+          <div class="fg">
+            <label>Размер</label>
+            <input class="fi" type="number" id="prop-fontsize" min="4" max="400" oninput="updateProp('fontSize')">
           </div>
-          <div class="form-group">
-            <label>Шрифт</label>
-            <select class="form-select" id="prop-font" onchange="updateProp('font')">
-              <option value="Inter">Inter</option>
-              <option value="Arial">Arial</option>
-              <option value="Georgia">Georgia</option>
-              <option value="Impact">Impact</option>
-              <option value="Courier New">Courier New</option>
-            </select>
+          <div class="fg">
+            <label>Цвет</label>
+            <input type="color" id="prop-color" oninput="updateProp('color')">
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Размер</label>
-              <input class="form-input" type="number" id="prop-fontsize" min="6" max="300" oninput="updateProp('fontSize')" />
-            </div>
-            <div class="form-group">
-              <label>Цвет</label>
-              <input type="color" id="prop-color" oninput="updateProp('color')" />
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Жирность</label>
-            <select class="form-select" id="prop-weight" onchange="updateProp('fontWeight')">
+        </div>
+        <div class="fr">
+          <div class="fg">
+            <label>Начертание</label>
+            <select class="fs" id="prop-weight" onchange="updateProp('fontWeight')">
               <option value="normal">Обычный</option>
               <option value="bold">Жирный</option>
             </select>
           </div>
-        </div>
-      </div>
-
-      <!-- Common props -->
-      <div class="section-body">
-        <div class="form-group">
-          <label>Прозрачность</label>
-          <div class="range-row">
-            <input type="range" id="prop-opacity" min="0" max="1" step="0.01" oninput="updateProp('opacity')" />
-            <span class="range-val" id="prop-opacity-val">100%</span>
+          <div class="fg">
+            <label>Наклон</label>
+            <select class="fs" id="prop-style" onchange="updateProp('fontStyle')">
+              <option value="normal">Обычный</option>
+              <option value="italic">Курсив</option>
+            </select>
           </div>
         </div>
-        <div class="form-group">
-          <label>Поворот</label>
-          <div class="range-row">
-            <input type="range" id="prop-angle" min="-180" max="180" step="1" oninput="updateProp('angle')" />
-            <span class="range-val" id="prop-angle-val">0°</span>
+        <!-- ★ LETTER SPACING ★ -->
+        <div class="fg">
+          <label>Межбуквенный интервал</label>
+          <div class="rr">
+            <input type="range" id="prop-spacing" min="-200" max="1000" step="10" oninput="updateProp('charSpacing')">
+            <span class="rv" id="prop-spacing-val">0</span>
           </div>
         </div>
       </div>
-
-      <div class="section-body">
-        <div class="btn-row">
-          <button class="btn btn-ghost" onclick="bringForward()">↑ Вверх</button>
-          <button class="btn btn-ghost" onclick="sendBackward()">↓ Вниз</button>
-        </div>
-        <button class="btn btn-panel" style="color:var(--danger);border-color:#2d1a1a;" onclick="deleteSelected()">
-          ✕ Удалить слой
-        </button>
-      </div>
-
     </div>
-  </aside>
 
+    <!-- IMAGE color tint -->
+    <div id="img-props" style="display:none">
+      <div class="sb">
+        <div class="tgl-row">
+          <span class="tgl-label">Тонирование цветом</span>
+          <label class="tgl"><input type="checkbox" id="prop-tint-on" onchange="updateTint()"><span class="tgl-slider"></span></label>
+        </div>
+        <div id="tint-controls" style="display:none">
+          <div class="fr">
+            <div class="fg">
+              <label>Цвет</label>
+              <input type="color" id="prop-tint-color" value="#ffffff" oninput="updateTint()">
+            </div>
+            <div class="fg">
+              <label>Интенсивность</label>
+              <input class="fi" type="number" id="prop-tint-pct" min="0" max="100" value="100" oninput="updateTint()">
+            </div>
+          </div>
+          <div class="fg">
+            <div class="rr">
+              <input type="range" id="prop-tint-range" min="0" max="100" step="1" value="100" oninput="syncTintSlider()">
+              <span class="rv" id="prop-tint-val">100%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMON props -->
+    <div class="sb" style="padding-top:4px">
+      <hr class="sep">
+      <div class="fg" style="margin-top:8px">
+        <label>Прозрачность</label>
+        <div class="rr">
+          <input type="range" id="prop-opacity" min="0" max="1" step="0.01" oninput="updateProp('opacity')">
+          <span class="rv" id="prop-opacity-val">100%</span>
+        </div>
+      </div>
+      <div class="fg">
+        <label>Поворот</label>
+        <div class="rr">
+          <input type="range" id="prop-angle" min="-180" max="180" step="1" oninput="updateProp('angle')">
+          <span class="rv" id="prop-angle-val">0°</span>
+        </div>
+      </div>
+      <hr class="sep" style="margin-bottom:8px">
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="layerUp()">↑ Вверх</button>
+        <button class="btn btn-ghost" onclick="layerDown()">↓ Вниз</button>
+      </div>
+      <button class="btn btn-panel btn-danger" onclick="deleteSelected()">✕ Удалить слой</button>
+    </div>
+
+  </div>
+</aside>
+</div><!-- /#app -->
+
+<!-- ══ GALLERY MODAL ══════════════════════════════════ -->
+<div id="gallery-modal">
+  <div id="gm-header">
+    <h2>🗂 Галерея форм</h2>
+    <input id="gm-search" type="search" placeholder="Поиск по названию..." oninput="filterGallery()">
+    <div id="gm-cats"></div>
+    <button class="btn btn-ghost" onclick="closeGallery()">✕ Закрыть</button>
+  </div>
+  <div id="gm-body">
+    <div id="gm-grid"></div>
+  </div>
 </div>
 
-<!-- Mobile toggle -->
-<button class="panel-toggle-btn" onclick="document.getElementById('right-panel').classList.toggle('open')">⚙</button>
+<!-- Mobile FABs -->
+<button id="fab-props" onclick="document.getElementById('right-panel').classList.toggle('open')">⚙</button>
+<button id="fab-left" onclick="document.getElementById('left-panel').classList.toggle('open')">☰</button>
 
-<!-- Toast -->
 <div id="toast"></div>
 
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════ -->
 <script>
-/* ══════════════════════════════════════════════════════════════════
-   STATE
-══════════════════════════════════════════════════════════════════ */
-const state = {
-  canvas: null,
-  jerseyImg: null,
-  customFonts: [],     // [{name, family}]
-  layerMeta: new Map() // fabricObj -> {id, type, name}
+'use strict';
+
+/* ── CUSTOM FILTER: ColorOverlay ─────────────────────
+   Blends each non-transparent pixel towards target color.
+   intensity=1 → fully replaces color (silhouette)
+   intensity=0 → original colors unchanged
+─────────────────────────────────────────────────── */
+fabric.Image.filters.ColorOverlay = fabric.util.createClass(
+  fabric.Image.filters.BaseFilter, {
+  type: 'ColorOverlay',
+  color: '#ffffff',
+  intensity: 1,
+
+  initialize: function(opts) {
+    this.callSuper('initialize', opts);
+    this.color     = (opts && opts.color)     || '#ffffff';
+    this.intensity = (opts && opts.intensity !== undefined) ? opts.intensity : 1;
+  },
+
+  applyTo2d: function(opts) {
+    const d = opts.imageData.data;
+    const hex = this.color.replace('#','');
+    const tr = parseInt(hex.slice(0,2),16);
+    const tg = parseInt(hex.slice(2,4),16);
+    const tb = parseInt(hex.slice(4,6),16);
+    const k  = Math.max(0,Math.min(1,this.intensity));
+    const k1 = 1 - k;
+    for (let i=0;i<d.length;i+=4) {
+      if (d[i+3] > 10) {
+        d[i]   = (d[i]   * k1 + tr * k + .5)|0;
+        d[i+1] = (d[i+1] * k1 + tg * k + .5)|0;
+        d[i+2] = (d[i+2] * k1 + tb * k + .5)|0;
+      }
+    }
+  },
+
+  toObject: function() {
+    return fabric.util.object.extend(this.callSuper('toObject'), {
+      color: this.color, intensity: this.intensity
+    });
+  }
+});
+fabric.Image.filters.ColorOverlay.fromObject = function(obj, cb) {
+  cb(new fabric.Image.filters.ColorOverlay(obj));
 };
 
-let layerCounter = 0;
+/* ── STATE ───────────────────────────────────────── */
+const S = {
+  canvas:      null,
+  jerseyImg:   null,
+  meta:        new Map(),     // fabricObj → {id, type, name}
+  galleryData: [],            // loaded from manifest
+  allCats:     [],
+  activeCat:   'все',
+};
+let lc = 0; // layer counter
 
-/* ══════════════════════════════════════════════════════════════════
-   INIT FABRIC CANVAS
-══════════════════════════════════════════════════════════════════ */
-function initCanvas(w = 600, h = 700) {
-  if (state.canvas) {
-    state.canvas.dispose();
-  }
+/* ── INIT CANVAS ─────────────────────────────────── */
+function initCanvas(w=600, h=700) {
+  if (S.canvas) { try { S.canvas.dispose(); } catch(e){} }
   const wrap = document.getElementById('canvas-wrap');
-  wrap.style.width  = w + 'px';
-  wrap.style.height = h + 'px';
+  wrap.style.width  = w+'px';
+  wrap.style.height = h+'px';
 
-  state.canvas = new fabric.Canvas('c', {
-    width:               w,
-    height:              h,
-    backgroundColor:     '#1a1a1a',
+  S.canvas = new fabric.Canvas('c', {
+    width: w, height: h,
+    backgroundColor: '#1a1a1a',
     preserveObjectStacking: true,
-    selection:           true,
   });
 
-  state.canvas.on('selection:created',  syncPropsPanel);
-  state.canvas.on('selection:updated',  syncPropsPanel);
-  state.canvas.on('selection:cleared',  clearPropsPanel);
-  state.canvas.on('object:modified',    syncPropsPanel);
-  state.canvas.on('object:added',       updateLayerList);
-  state.canvas.on('object:removed',     updateLayerList);
-  state.canvas.on('object:modified',    updateLayerList);
-  state.canvas.on('stack:changed',      updateLayerList);
+  S.canvas.on('selection:created',  syncProps);
+  S.canvas.on('selection:updated',  syncProps);
+  S.canvas.on('selection:cleared',  clearProps);
+  S.canvas.on('object:modified',    syncProps);
+  S.canvas.on('object:added',       updateLayers);
+  S.canvas.on('object:removed',     updateLayers);
+  S.canvas.on('object:modified',    updateLayers);
 }
-
 initCanvas();
 
-/* ══════════════════════════════════════════════════════════════════
-   JERSEY BACKGROUND
-══════════════════════════════════════════════════════════════════ */
-function loadJersey(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  fabric.Image.fromURL(url, img => {
-    // Scale to fit canvas nicely
-    const maxW = 700, maxH = 820;
-    const scaleX = maxW / img.width;
-    const scaleY = maxH / img.height;
-    const scale  = Math.min(scaleX, scaleY, 1);
-    const W = Math.round(img.width  * scale);
-    const H = Math.round(img.height * scale);
+/* ── GALLERY ─────────────────────────────────────── */
+async function loadGalleryManifest() {
+  try {
+    const r = await fetch('jerseys/manifest.json');
+    if (!r.ok) return;
+    const d = await r.json();
+    S.galleryData = d.jerseys || [];
+    S.allCats = d.categories || ['все'];
+    buildCategoryButtons();
+  } catch(e) { /* manifest не найден — норм */ }
+}
+loadGalleryManifest();
 
-    // Re-init canvas to jersey proportions
-    state.layerMeta.clear();
-    initCanvas(W, H);
-
-    fabric.Image.fromURL(url, jerseyImg => {
-      jerseyImg.scaleToWidth(W);
-      jerseyImg.set({ selectable: false, evented: false, hoverCursor: 'default' });
-      state.canvas.add(jerseyImg);
-      state.jerseyImg = jerseyImg;
-      document.getElementById('canvas-placeholder').style.opacity = '0';
-      updateLayerList();
-    });
+function buildCategoryButtons() {
+  const wrap = document.getElementById('gm-cats');
+  wrap.innerHTML = '';
+  S.allCats.forEach(cat => {
+    const b = document.createElement('button');
+    b.className = 'cat-btn' + (cat === S.activeCat ? ' active' : '');
+    b.textContent = cat;
+    b.onclick = () => { S.activeCat = cat; filterGallery(); buildCategoryButtons(); };
+    wrap.appendChild(b);
   });
-  e.target.value = '';
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   ADD TEXT
-══════════════════════════════════════════════════════════════════ */
-function addText(isNumber = false) {
-  const input  = document.getElementById('new-text');
-  const raw    = input.value.trim();
-  const txt    = raw || (isNumber ? '10' : 'Текст');
+function openGallery() {
+  document.getElementById('gallery-modal').classList.add('open');
+  renderGalleryGrid(S.galleryData);
+}
+function closeGallery() {
+  document.getElementById('gallery-modal').classList.remove('open');
+}
 
-  const fSize  = isNumber ? 90 : 36;
-  const weight = isNumber ? 'bold' : 'normal';
-  const yPos   = state.canvas.height / 2;
+function filterGallery() {
+  const q = document.getElementById('gm-search').value.toLowerCase();
+  let items = S.galleryData;
+  if (S.activeCat && S.activeCat !== 'все') {
+    items = items.filter(j => j.category === S.activeCat);
+  }
+  if (q) items = items.filter(j => j.name.toLowerCase().includes(q));
+  renderGalleryGrid(items);
+}
+
+function renderGalleryGrid(items) {
+  const grid = document.getElementById('gm-grid');
+  grid.innerHTML = '';
+
+  if (items.length === 0 && S.galleryData.length === 0) {
+    grid.innerHTML = `<div class="gm-empty">
+      <p style="margin-bottom:10px">Галерея пустая.</p>
+      <p>Добавьте изображения форм в папку <code>jerseys/</code><br>и опишите их в файле <code>jerseys/manifest.json</code></p>
+    </div>`;
+    return;
+  }
+
+  if (items.length === 0) {
+    grid.innerHTML = `<div class="gm-empty">Ничего не найдено</div>`;
+    return;
+  }
+
+  const obs = new IntersectionObserver((entries, o) => {
+    entries.forEach(en => {
+      if (en.isIntersecting) {
+        const img = en.target.querySelector('img');
+        if (img && img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+        o.unobserve(en.target);
+      }
+    });
+  }, { rootMargin: '100px' });
+
+  items.forEach(jersey => {
+    const card = document.createElement('div');
+    card.className = 'gm-card';
+    card.innerHTML = `<img data-src="jerseys/${jersey.file}" alt="${jersey.name}" loading="lazy"><div class="gm-name">${jersey.name}</div>`;
+    card.onclick = () => applyGalleryJersey(jersey);
+    grid.appendChild(card);
+    obs.observe(card);
+  });
+}
+
+function applyGalleryJersey(jersey) {
+  closeGallery();
+  const url = `jerseys/${jersey.file}`;
+  fabric.Image.fromURL(url, img => {
+    if (!img) { showToast('Не удалось загрузить изображение'); return; }
+    const maxW=720, maxH=860;
+    const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+    const W = Math.round(img.width*scale);
+    const H = Math.round(img.height*scale);
+    rebuildBackgroundJersey(url, W, H);
+  }, { crossOrigin: 'anonymous' });
+}
+
+/* ── JERSEY BACKGROUND ───────────────────────────── */
+function loadJersey(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const url = URL.createObjectURL(file);
+  fabric.Image.fromURL(url, img => {
+    const maxW=720, maxH=860;
+    const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+    const W = Math.round(img.width*scale);
+    const H = Math.round(img.height*scale);
+    rebuildBackgroundJersey(url, W, H);
+  });
+  e.target.value='';
+}
+
+function rebuildBackgroundJersey(url, W, H) {
+  // Save existing user layers
+  const userLayers = S.canvas.getObjects()
+    .filter(o => o.selectable !== false)
+    .map(o => ({ obj: o, meta: S.meta.get(o) }));
+
+  S.meta.clear();
+  initCanvas(W, H);
+
+  fabric.Image.fromURL(url, jerseyImg => {
+    jerseyImg.scaleToWidth(W);
+    jerseyImg.set({ selectable:false, evented:false, hoverCursor:'default' });
+    S.canvas.add(jerseyImg);
+    S.jerseyImg = jerseyImg;
+
+    // Restore user layers
+    userLayers.forEach(({obj, meta}) => {
+      S.canvas.add(obj);
+      if (meta) S.meta.set(obj, meta);
+    });
+    S.canvas.requestRenderAll();
+    document.getElementById('canvas-placeholder').style.opacity='0';
+    updateLayers();
+  });
+}
+
+/* ── ADD TEXT ────────────────────────────────────── */
+function addText(isNum=false) {
+  const inp = document.getElementById('new-text');
+  const raw = inp.value.trim();
+  const txt = raw || (isNum ? '10' : 'Текст');
 
   const obj = new fabric.Text(txt, {
-    left:       state.canvas.width / 2,
-    top:        yPos,
-    originX:    'center',
-    originY:    'center',
-    fontSize:   fSize,
+    left:       S.canvas.width/2,
+    top:        S.canvas.height/2,
+    originX:    'center', originY: 'center',
+    fontSize:   isNum ? 100 : 40,
     fontFamily: 'Inter',
-    fontWeight: weight,
+    fontWeight: isNum ? 'bold' : 'normal',
     fill:       '#ffffff',
+    charSpacing: 0,
     opacity:    1,
     angle:      0,
   });
 
-  const id   = ++layerCounter;
-  const name = isNumber ? `Номер: ${txt}` : `Текст: ${txt}`;
-  state.layerMeta.set(obj, { id, type: 'text', name });
-
-  state.canvas.add(obj);
-  state.canvas.setActiveObject(obj);
-  state.canvas.renderAll();
-  if (raw) input.value = '';
-  updateLayerList();
+  const id   = ++lc;
+  const name = isNum ? `Номер: ${txt}` : `Текст: ${txt}`;
+  S.meta.set(obj, { id, type:'text', name });
+  S.canvas.add(obj);
+  S.canvas.setActiveObject(obj);
+  S.canvas.requestRenderAll();
+  if (raw) inp.value='';
+  updateLayers();
 }
 
 function addNumber() {
-  const input = document.getElementById('new-text');
-  const prev  = input.value;
-  if (!prev.trim()) input.value = '10';
+  const inp = document.getElementById('new-text');
+  if (!inp.value.trim()) inp.value='10';
   addText(true);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   ADD LOGO/IMAGE
-══════════════════════════════════════════════════════════════════ */
+/* ── ADD LOGO/IMAGE ──────────────────────────────── */
 function addLogo(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
+  const file = e.target.files[0]; if (!file) return;
+  const url  = URL.createObjectURL(file);
   fabric.Image.fromURL(url, img => {
-    const maxDim = Math.min(state.canvas.width, state.canvas.height) * 0.3;
-    if (img.width > maxDim || img.height > maxDim) {
-      img.scaleToWidth(maxDim);
-    }
-    img.set({
-      left:    state.canvas.width  / 2,
-      top:     state.canvas.height / 2,
-      originX: 'center',
-      originY: 'center',
-    });
-    const id   = ++layerCounter;
-    state.layerMeta.set(img, { id, type: 'image', name: `Лого: ${file.name.split('.')[0]}` });
-    state.canvas.add(img);
-    state.canvas.setActiveObject(img);
-    state.canvas.renderAll();
-    updateLayerList();
+    const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.32;
+    const scale = Math.min(maxD/img.width, maxD/img.height, 1);
+    img.scale(scale);
+    img.set({ left: S.canvas.width/2, top: S.canvas.height/2, originX:'center', originY:'center' });
+    const id   = ++lc;
+    const name = `Лого: ${file.name.replace(/\.[^.]+$/,'')}`;
+    S.meta.set(img, { id, type:'image', name });
+    S.canvas.add(img);
+    S.canvas.setActiveObject(img);
+    S.canvas.requestRenderAll();
+    updateLayers();
   });
-  e.target.value = '';
+  e.target.value='';
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   CUSTOM FONTS
-══════════════════════════════════════════════════════════════════ */
-function loadFont(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const fontName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9\-_]/g, '_');
+/* ── FONTS: upload ────────────────────────────────── */
+function loadFontFile(e) {
+  Array.from(e.target.files).forEach(file => {
+    const fam = file.name.replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9\-_]/g,'_');
     const url = URL.createObjectURL(file);
-    const fontFace = new FontFace(fontName, `url(${url})`);
-    fontFace.load().then(loaded => {
-      document.fonts.add(loaded);
-      state.customFonts.push({ name: file.name, family: fontName });
-      addFontOption(fontName);
-      addFontChip(fontName);
+    new FontFace(fam, `url(${url})`).load().then(f => {
+      document.fonts.add(f);
+      addFontToDropdowns(fam, file.name);
+      addFontChip(fam, true);
       showToast(`Шрифт загружен: ${file.name}`);
     }).catch(() => showToast('Ошибка загрузки шрифта'));
   });
-  e.target.value = '';
+  e.target.value='';
 }
 
-function addFontOption(family) {
+/* ── FONTS: preload from manifest ────────────────── */
+async function preloadFonts() {
+  try {
+    const r = await fetch('fonts/manifest.json');
+    if (!r.ok) return;
+    const d = await r.json();
+    for (const f of (d.fonts||[])) {
+      try {
+        const face = new FontFace(f.family, `url(fonts/${f.file})`);
+        const loaded = await face.load();
+        document.fonts.add(loaded);
+        addFontToDropdowns(f.family, f.name || f.family);
+        addFontChip(f.family, false);
+      } catch(e) { console.warn('Font load failed:', f.file); }
+    }
+  } catch(e) { /* нет манифеста — норм */ }
+}
+preloadFonts();
+
+function addFontToDropdowns(family, label) {
   ['prop-font'].forEach(id => {
     const sel = document.getElementById(id);
+    if ([...sel.options].some(o => o.value===family)) return;
     const opt = document.createElement('option');
-    opt.value = family;
-    opt.textContent = family;
+    opt.value = family; opt.textContent = label || family;
     sel.appendChild(opt);
   });
 }
 
-function addFontChip(family) {
+function addFontChip(family, removable) {
   const wrap = document.getElementById('font-chips');
+  if (wrap.querySelector(`[data-fam="${family}"]`)) return;
   const chip = document.createElement('span');
-  chip.className = 'font-chip';
-  chip.dataset.family = family;
-  chip.innerHTML = `<span>${family}</span><button onclick="removeFont('${family}')">✕</button>`;
+  chip.className='fc'; chip.dataset.fam=family;
+  chip.innerHTML = `<span>${family}</span>${removable?`<button onclick="removeFont('${family}')">✕</button>`:''}`;
   wrap.appendChild(chip);
 }
 
-function removeFont(family) {
-  // Remove from selects
-  document.querySelectorAll('#prop-font option').forEach(o => {
-    if (o.value === family) o.remove();
-  });
-  // Remove chip
-  document.querySelectorAll(`[data-family="${family}"]`).forEach(el => el.remove());
-  state.customFonts = state.customFonts.filter(f => f.family !== family);
+function removeFont(fam) {
+  document.querySelectorAll(`#prop-font option[value="${fam}"]`).forEach(o=>o.remove());
+  document.querySelectorAll(`[data-fam="${fam}"]`).forEach(el=>el.remove());
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   PROPERTIES PANEL
-══════════════════════════════════════════════════════════════════ */
-function syncPropsPanel() {
-  const obj = state.canvas.getActiveObject();
-  if (!obj || obj.type === 'activeSelection') { clearPropsPanel(); return; }
+/* ── PROPERTIES PANEL ────────────────────────────── */
+function syncProps() {
+  const obj = S.canvas.getActiveObject();
+  if (!obj || obj.type==='activeSelection') { clearProps(); return; }
 
-  document.getElementById('props-empty').style.display = 'none';
+  document.getElementById('props-empty').style.display='none';
   document.getElementById('props-panel').classList.add('visible');
 
-  const isText = obj.type === 'text' || obj.type === 'i-text';
-  document.getElementById('text-props').style.display = isText ? 'block' : 'none';
+  const isText = obj.type==='text' || obj.type==='i-text';
+  document.getElementById('text-props').style.display = isText ? '' : 'none';
+  document.getElementById('img-props').style.display  = (!isText && obj.type==='image') ? '' : 'none';
 
   if (isText) {
-    document.getElementById('prop-text').value     = obj.text || '';
-    document.getElementById('prop-font').value     = obj.fontFamily || 'Inter';
-    document.getElementById('prop-fontsize').value = Math.round(obj.fontSize) || 36;
-    document.getElementById('prop-color').value    = obj.fill || '#ffffff';
-    document.getElementById('prop-weight').value   = obj.fontWeight || 'normal';
+    document.getElementById('prop-text').value      = obj.text   || '';
+    document.getElementById('prop-font').value      = obj.fontFamily || 'Inter';
+    document.getElementById('prop-fontsize').value  = Math.round(obj.fontSize) || 40;
+    document.getElementById('prop-color').value     = obj.fill   || '#ffffff';
+    document.getElementById('prop-weight').value    = obj.fontWeight || 'normal';
+    document.getElementById('prop-style').value     = obj.fontStyle  || 'normal';
+
+    // char spacing
+    const cs = obj.charSpacing || 0;
+    document.getElementById('prop-spacing').value      = cs;
+    document.getElementById('prop-spacing-val').textContent = cs;
   }
 
-  const op = obj.opacity ?? 1;
-  document.getElementById('prop-opacity').value     = op;
-  document.getElementById('prop-opacity-val').textContent = Math.round(op * 100) + '%';
+  if (!isText && obj.type==='image') {
+    // detect existing tint filter
+    const tintF = obj.filters && obj.filters.find(f => f.type==='ColorOverlay');
+    const tintOn = !!tintF;
+    document.getElementById('prop-tint-on').checked    = tintOn;
+    document.getElementById('tint-controls').style.display = tintOn ? '' : 'none';
+    if (tintF) {
+      document.getElementById('prop-tint-color').value = tintF.color;
+      const pct = Math.round(tintF.intensity*100);
+      document.getElementById('prop-tint-pct').value   = pct;
+      document.getElementById('prop-tint-range').value = pct;
+      document.getElementById('prop-tint-val').textContent = pct+'%';
+    }
+  }
+
+  const op  = obj.opacity ?? 1;
+  document.getElementById('prop-opacity').value             = op;
+  document.getElementById('prop-opacity-val').textContent   = Math.round(op*100)+'%';
 
   const ang = Math.round(obj.angle ?? 0);
-  document.getElementById('prop-angle').value     = ang;
-  document.getElementById('prop-angle-val').textContent = ang + '°';
+  document.getElementById('prop-angle').value               = ang;
+  document.getElementById('prop-angle-val').textContent     = ang+'°';
 }
 
-function clearPropsPanel() {
-  document.getElementById('props-empty').style.display = '';
+function clearProps() {
+  document.getElementById('props-empty').style.display='';
   document.getElementById('props-panel').classList.remove('visible');
 }
 
 function updateProp(prop) {
-  const obj = state.canvas.getActiveObject();
-  if (!obj) return;
+  const obj = S.canvas.getActiveObject(); if (!obj) return;
 
-  if (prop === 'text') {
+  if (prop==='text') {
     obj.set('text', document.getElementById('prop-text').value);
-    const meta = state.layerMeta.get(obj);
-    if (meta) meta.name = `Текст: ${obj.text.substring(0,20)}`;
-    updateLayerList();
-  } else if (prop === 'font') {
-    obj.set('fontFamily', document.getElementById('prop-font').value);
-  } else if (prop === 'fontSize') {
-    obj.set('fontSize', parseInt(document.getElementById('prop-fontsize').value) || 36);
-  } else if (prop === 'color') {
-    obj.set('fill', document.getElementById('prop-color').value);
-  } else if (prop === 'fontWeight') {
-    obj.set('fontWeight', document.getElementById('prop-weight').value);
-  } else if (prop === 'opacity') {
-    const val = parseFloat(document.getElementById('prop-opacity').value);
-    obj.set('opacity', val);
-    document.getElementById('prop-opacity-val').textContent = Math.round(val * 100) + '%';
-  } else if (prop === 'angle') {
-    const ang = parseInt(document.getElementById('prop-angle').value);
-    obj.set('angle', ang);
-    document.getElementById('prop-angle-val').textContent = ang + '°';
+    const m = S.meta.get(obj); if (m) m.name = `Текст: ${obj.text.substring(0,22)}`;
+    updateLayers();
+  } else if (prop==='font')         { obj.set('fontFamily', document.getElementById('prop-font').value);
+  } else if (prop==='fontSize')     { obj.set('fontSize',   parseInt(document.getElementById('prop-fontsize').value)||40);
+  } else if (prop==='color')        { obj.set('fill',       document.getElementById('prop-color').value);
+  } else if (prop==='fontWeight')   { obj.set('fontWeight', document.getElementById('prop-weight').value);
+  } else if (prop==='fontStyle')    { obj.set('fontStyle',  document.getElementById('prop-style').value);
+  } else if (prop==='charSpacing') {
+    const v = parseInt(document.getElementById('prop-spacing').value)||0;
+    obj.set('charSpacing', v);
+    document.getElementById('prop-spacing-val').textContent = v;
+  } else if (prop==='opacity') {
+    const v = parseFloat(document.getElementById('prop-opacity').value);
+    obj.set('opacity', v);
+    document.getElementById('prop-opacity-val').textContent = Math.round(v*100)+'%';
+  } else if (prop==='angle') {
+    const v = parseInt(document.getElementById('prop-angle').value);
+    obj.set('angle', v);
+    document.getElementById('prop-angle-val').textContent = v+'°';
   }
 
-  state.canvas.requestRenderAll();
+  S.canvas.requestRenderAll();
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   LAYER LIST
-══════════════════════════════════════════════════════════════════ */
-function updateLayerList() {
-  const list = document.getElementById('layer-list');
-  const objects = state.canvas.getObjects();
-  // Filter out jersey background (non-selectable)
-  const layers = objects.filter(o => o.selectable !== false);
+/* ── IMAGE COLOR TINTING ─────────────────────────── */
+function updateTint() {
+  const obj = S.canvas.getActiveObject();
+  if (!obj || obj.type!=='image') return;
 
-  if (layers.length === 0) {
-    list.innerHTML = '<li class="empty-state">Слоёв пока нет</li>';
-    return;
+  const on  = document.getElementById('prop-tint-on').checked;
+  const col = document.getElementById('prop-tint-color').value;
+  const pct = Math.max(0,Math.min(100,parseInt(document.getElementById('prop-tint-pct').value)||100));
+  const int = pct/100;
+
+  // Sync slider
+  document.getElementById('prop-tint-range').value = pct;
+  document.getElementById('prop-tint-val').textContent = pct+'%';
+  document.getElementById('tint-controls').style.display = on ? '' : 'none';
+
+  // Remove existing ColorOverlay filters
+  obj.filters = (obj.filters||[]).filter(f => f.type!=='ColorOverlay');
+
+  if (on) {
+    obj.filters.push(new fabric.Image.filters.ColorOverlay({ color: col, intensity: int }));
   }
 
-  const active = state.canvas.getActiveObject();
-  list.innerHTML = '';
+  obj.applyFilters();
+  S.canvas.requestRenderAll();
+}
 
-  // Reverse so top layers appear first
-  [...layers].reverse().forEach(obj => {
-    const meta = state.layerMeta.get(obj) || { type: 'unknown', name: 'Слой' };
-    const icon = meta.type === 'text' ? '📝' : meta.type === 'image' ? '🖼' : '◻';
-    const isActive = obj === active;
+function syncTintSlider() {
+  const v = document.getElementById('prop-tint-range').value;
+  document.getElementById('prop-tint-pct').value = v;
+  document.getElementById('prop-tint-val').textContent = v+'%';
+  updateTint();
+}
 
+/* ── LAYER LIST ──────────────────────────────────── */
+function updateLayers() {
+  const list = document.getElementById('layer-list');
+  const all  = S.canvas.getObjects().filter(o => o.selectable!==false);
+
+  if (!all.length) { list.innerHTML='<li class="empty-state">Слоёв пока нет</li>'; return; }
+
+  const active = S.canvas.getActiveObject();
+  list.innerHTML='';
+
+  [...all].reverse().forEach(obj => {
+    const m = S.meta.get(obj) || { type:'unknown', name:'Слой' };
+    const icon = m.type==='text' ? '📝' : m.type==='image' ? '🖼' : '◻';
     const li = document.createElement('li');
-    li.className = 'layer-item' + (isActive ? ' active' : '');
-    li.innerHTML = `
-      <span class="layer-icon">${icon}</span>
-      <span class="layer-name">${meta.name}</span>
-      <span class="layer-actions">
-        <button title="Вверх" onclick="moveLayerUp(event, this)">↑</button>
-        <button title="Вниз" onclick="moveLayerDown(event, this)">↓</button>
-        <button title="Удалить" class="del" onclick="removeLayerItem(event, this)">✕</button>
-      </span>`;
+    li.className = 'li' + (obj===active ? ' active' : '');
+    li.innerHTML=`<span class="li-icon">${icon}</span><span class="li-name">${m.name}</span><span class="li-acts"><button title="Вверх" data-act="up">↑</button><button title="Вниз" data-act="dn">↓</button><button title="Удалить" class="del" data-act="del">✕</button></span>`;
 
-    li.addEventListener('click', function(e) {
-      if (e.target.tagName === 'BUTTON') return;
-      state.canvas.setActiveObject(obj);
-      state.canvas.requestRenderAll();
-      syncPropsPanel();
-      updateLayerList();
+    li.addEventListener('click', ev => {
+      const act = ev.target.dataset.act;
+      if (act==='up')  { S.canvas.bringForward(obj); S.canvas.requestRenderAll(); updateLayers(); return; }
+      if (act==='dn')  { S.canvas.sendBackwards(obj); S.canvas.requestRenderAll(); updateLayers(); return; }
+      if (act==='del') { S.canvas.remove(obj); S.meta.delete(obj); clearProps(); updateLayers(); return; }
+      S.canvas.setActiveObject(obj); S.canvas.requestRenderAll(); syncProps(); updateLayers();
     });
-
-    // Store reference
-    li._fabricObj = obj;
-    li.dataset.idx = layers.indexOf(obj);
     list.appendChild(li);
   });
 }
 
-function moveLayerUp(e, btn) {
-  e.stopPropagation();
-  const obj = getObjFromBtn(btn);
-  if (obj) { state.canvas.bringForward(obj); state.canvas.requestRenderAll(); updateLayerList(); }
-}
-
-function moveLayerDown(e, btn) {
-  e.stopPropagation();
-  const obj = getObjFromBtn(btn);
-  if (obj) { state.canvas.sendBackwards(obj); state.canvas.requestRenderAll(); updateLayerList(); }
-}
-
-function removeLayerItem(e, btn) {
-  e.stopPropagation();
-  const obj = getObjFromBtn(btn);
-  if (obj) { state.canvas.remove(obj); state.layerMeta.delete(obj); updateLayerList(); clearPropsPanel(); }
-}
-
-function getObjFromBtn(btn) {
-  const li = btn.closest('.layer-item');
-  // Walk canvas objects to match
-  const layers = state.canvas.getObjects().filter(o => o.selectable !== false);
-  const name = li.querySelector('.layer-name').textContent;
-  // Match by layerMeta name
-  for (const [obj, meta] of state.layerMeta.entries()) {
-    if (meta.name === name && layers.includes(obj)) return obj;
-  }
-  return null;
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   SELECTED OBJ CONTROLS
-══════════════════════════════════════════════════════════════════ */
 function deleteSelected() {
-  const obj = state.canvas.getActiveObject();
-  if (!obj) return;
-  state.canvas.remove(obj);
-  state.layerMeta.delete(obj);
-  clearPropsPanel();
-  updateLayerList();
+  const obj = S.canvas.getActiveObject(); if (!obj) return;
+  S.canvas.remove(obj); S.meta.delete(obj); clearProps(); updateLayers();
 }
+function layerUp()   { const o=S.canvas.getActiveObject(); if(o){S.canvas.bringForward(o);S.canvas.requestRenderAll();updateLayers();} }
+function layerDown() { const o=S.canvas.getActiveObject(); if(o){S.canvas.sendBackwards(o);S.canvas.requestRenderAll();updateLayers();} }
 
-function bringForward() {
-  const obj = state.canvas.getActiveObject();
-  if (obj) { state.canvas.bringForward(obj); state.canvas.requestRenderAll(); updateLayerList(); }
-}
-
-function sendBackward() {
-  const obj = state.canvas.getActiveObject();
-  if (obj) { state.canvas.sendBackwards(obj); state.canvas.requestRenderAll(); updateLayerList(); }
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   EXPORT — always composites watermark
-══════════════════════════════════════════════════════════════════ */
+/* ── EXPORT ──────────────────────────────────────── */
 function exportCanvas() {
-  // Deselect all first
-  state.canvas.discardActiveObject();
-  state.canvas.requestRenderAll();
+  S.canvas.discardActiveObject();
+  S.canvas.requestRenderAll();
 
-  const dataURL = state.canvas.toDataURL({ format: 'png', multiplier: 1 });
+  const scale = parseInt(document.getElementById('export-quality').value) || 2;
 
-  // Load watermark and composite
+  // ★ FIX: use scale multiplier for high-quality output
+  const dataURL = S.canvas.toDataURL({ format:'png', multiplier: scale });
+
   const wm = new Image();
   wm.crossOrigin = 'anonymous';
   wm.src = 'DERBYY.png';
-  wm.onload = function() {
-    const offscreen = document.createElement('canvas');
-    offscreen.width  = state.canvas.width;
-    offscreen.height = state.canvas.height;
-    const ctx = offscreen.getContext('2d');
 
-    // Draw main canvas
+  wm.onload = () => {
+    const oc  = document.createElement('canvas');
+    oc.width  = S.canvas.width  * scale;
+    oc.height = S.canvas.height * scale;
+    const ctx = oc.getContext('2d');
+
     const base = new Image();
-    base.onload = function() {
+    base.onload = () => {
       ctx.drawImage(base, 0, 0);
 
-      // Watermark: centered, max 40% width, 35% opacity
-      const wmMaxW  = offscreen.width  * 0.40;
-      const wmScale = Math.min(wmMaxW / wm.width, 1);
-      const wmW = wm.width  * wmScale;
-      const wmH = wm.height * wmScale;
-      const wmX = (offscreen.width  - wmW) / 2;
-      const wmY = (offscreen.height - wmH) / 2;
-
+      // Watermark: centered, 40% width, 35% opacity
+      const wmW = oc.width * 0.40;
+      const wmH = wm.height * (wmW / wm.width);
+      const wx  = (oc.width  - wmW) / 2;
+      const wy  = (oc.height - wmH) / 2;
       ctx.globalAlpha = 0.35;
-      ctx.drawImage(wm, wmX, wmY, wmW, wmH);
+      ctx.drawImage(wm, wx, wy, wmW, wmH);
       ctx.globalAlpha = 1;
 
-      // Download
-      offscreen.toBlob(blob => {
+      oc.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'derby-ftbl-jersey.png';
         a.click();
-        showToast('Изображение скачано!');
+        showToast(`Скачано (${scale}×) — ${oc.width}×${oc.height}px`);
       }, 'image/png');
     };
     base.src = dataURL;
   };
-  wm.onerror = function() {
-    // Watermark not found — export without it but show warning
-    showToast('⚠ Файл watermark.png не найден');
+
+  wm.onerror = () => {
+    // No watermark found — export anyway but warn
+    showToast('⚠ watermark.png не найден, скачано без знака');
     const a = document.createElement('a');
-    a.href = dataURL;
-    a.download = 'derby-ftbl-jersey.png';
-    a.click();
+    a.href = dataURL; a.download = 'derby-ftbl-jersey.png'; a.click();
   };
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   SAVE / LOAD PROJECT
-══════════════════════════════════════════════════════════════════ */
+/* ── SAVE / LOAD ──────────────────────────────────── */
 function saveProject() {
   try {
-    const json = state.canvas.toJSON(['selectable', 'evented', 'hoverCursor']);
-    localStorage.setItem('derby_project', JSON.stringify(json));
-    localStorage.setItem('derby_canvas_size', JSON.stringify({
-      w: state.canvas.width, h: state.canvas.height
-    }));
+    const json = S.canvas.toJSON(['selectable','evented','hoverCursor','charSpacing']);
+    localStorage.setItem('derby_proj',  JSON.stringify(json));
+    localStorage.setItem('derby_size',  JSON.stringify({ w:S.canvas.width, h:S.canvas.height }));
     showToast('Проект сохранён');
   } catch(e) { showToast('Ошибка сохранения'); }
 }
 
 function loadProject() {
-  const raw = localStorage.getItem('derby_project');
+  const raw = localStorage.getItem('derby_proj');
   if (!raw) { showToast('Нет сохранённого проекта'); return; }
   try {
     const json = JSON.parse(raw);
-    const size = JSON.parse(localStorage.getItem('derby_canvas_size') || '{"w":600,"h":700}');
-    state.layerMeta.clear();
-    initCanvas(size.w, size.h);
-    state.canvas.loadFromJSON(json, () => {
-      state.canvas.requestRenderAll();
-      // Rebuild layerMeta for loaded objects
-      state.canvas.getObjects().forEach(obj => {
-        if (obj.selectable === false) return;
-        const id   = ++layerCounter;
-        const type = (obj.type === 'text' || obj.type === 'i-text') ? 'text' : 'image';
-        const name = type === 'text' ? `Текст: ${obj.text?.substring(0, 20)}` : 'Изображение';
-        state.layerMeta.set(obj, { id, type, name });
+    const sz   = JSON.parse(localStorage.getItem('derby_size') || '{"w":600,"h":700}');
+    S.meta.clear();
+    initCanvas(sz.w, sz.h);
+    S.canvas.loadFromJSON(json, () => {
+      S.canvas.getObjects().forEach(obj => {
+        if (!obj.selectable) return;
+        const isText = obj.type==='text'||obj.type==='i-text';
+        S.meta.set(obj, {
+          id: ++lc,
+          type: isText ? 'text' : 'image',
+          name: isText ? `Текст: ${(obj.text||'').substring(0,22)}` : 'Изображение'
+        });
       });
-      updateLayerList();
-      document.getElementById('canvas-placeholder').style.opacity = '0';
+      S.canvas.requestRenderAll();
+      document.getElementById('canvas-placeholder').style.opacity='0';
+      updateLayers();
       showToast('Проект загружен');
     });
-  } catch(e) { showToast('Ошибка загрузки проекта'); }
+  } catch(e) { showToast('Ошибка загрузки'); }
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   TOAST
-══════════════════════════════════════════════════════════════════ */
-let toastTimer;
+/* ── KEYBOARD ────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+  if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  if (e.key==='Escape') { S.canvas.discardActiveObject(); S.canvas.requestRenderAll(); }
+  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveProject(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape' && document.getElementById('gallery-modal').classList.contains('open')) closeGallery();
+});
+
+/* ── TOAST ───────────────────────────────────────── */
+let toastT;
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2600);
 }
-
-/* ══════════════════════════════════════════════════════════════════
-   KEYBOARD SHORTCUTS
-══════════════════════════════════════════════════════════════════ */
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
-  if (e.key === 'Escape') { state.canvas.discardActiveObject(); state.canvas.requestRenderAll(); }
-});
 </script>
 </body>
 </html>
