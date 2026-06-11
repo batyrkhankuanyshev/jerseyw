@@ -1,0 +1,16 @@
+{
+  "fonts": [
+    { "family": "AdidasGermany2024",     "file": "Adidas Germany 2024 .ttf",               "name": "Adidas Germany 2024" },
+    { "family": "Argentina2024",          "file": "Argentina 2024 Tipografstore.ttf",        "name": "Argentina 2024" },
+    { "family": "Arsenal2425",            "file": "Arsenal 24-25 Tipografstore.ttf",         "name": "Arsenal 24-25" },
+    { "family": "BayernMunchenUEFA",      "file": "Bayern Munchen UEFA 2023-2024.ttf",       "name": "Bayern München UEFA 23-24" },
+    { "family": "EspanaEuro2024",         "file": "España Euro 2024 Tipografstore.ttf",      "name": "España Euro 2024" },
+    { "family": "NBALakers",              "file": "NBA Lakers.ttf",                          "name": "NBA Lakers" },
+    { "family": "PSGBold",                "file": "PSG-Bold.ttf",                            "name": "PSG Bold" },
+    { "family": "PSGRegular",             "file": "PSG-Regular.ttf",                         "name": "PSG Regular" },
+    { "family": "PSG2021Ligue1",          "file": "PSG2021Ligue1Font.ttf",                   "name": "PSG 2021 Ligue 1" },
+    { "family": "Portugal2024",           "file": "Portugal Euro 2024 Tipografstore.ttf",    "name": "Portugal Euro 2024" },
+    { "family": "PremierLeague2024",      "file": "Premier League 2024.ttf",                 "name": "Premier League 2024" },
+    { "family": "RealMadrid2022",         "file": "real-madrid-2022.ttf",                    "name": "Real Madrid 2022" }
+  ]
+}
