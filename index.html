@@ -203,6 +203,32 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     <button class="btn btn-panel" style="margin-top:6px" onclick="openGallery()">🗂 Выбрать из галереи</button>
   </div>
 
+  <div class="sh">Цвет формы</div>
+  <div class="sb">
+    <div class="fg">
+      <div class="tgl-row">
+        <span class="tgl-label">Изменить цвет</span>
+        <label class="tgl"><input type="checkbox" id="jersey-tint-on" onchange="updateJerseyTint()"><span class="tgl-slider"></span></label>
+      </div>
+    </div>
+    <div id="jersey-tint-controls" style="display:none">
+      <div class="fr">
+        <div class="fg">
+          <label>Цвет</label>
+          <input type="color" id="jersey-tint-color" value="#ff0000" oninput="updateJerseyTint()">
+        </div>
+        <div class="fg">
+          <label>Интенсивность</label>
+          <input class="fi" type="number" id="jersey-tint-pct" min="0" max="100" value="80" oninput="updateJerseyTint()">
+        </div>
+      </div>
+      <div class="rr">
+        <input type="range" id="jersey-tint-range" min="0" max="100" value="80" oninput="syncJerseyTintSlider()">
+        <span class="rv" id="jersey-tint-val">80%</span>
+      </div>
+    </div>
+  </div>
+
   <div class="sh">Добавить слой</div>
   <div class="sb">
     <div class="fg">
@@ -620,6 +646,35 @@ function rebuildBackgroundJersey(url, W, H) {
     document.getElementById('canvas-placeholder').style.opacity='0';
     updateLayers();
   });
+}
+
+/* ── JERSEY TINT ─────────────────────────────────── */
+function updateJerseyTint() {
+  const on  = document.getElementById('jersey-tint-on').checked;
+  document.getElementById('jersey-tint-controls').style.display = on ? '' : 'none';
+  if (!S.jerseyImg) return;
+
+  const hex = document.getElementById('jersey-tint-color').value.replace('#','');
+  const pct = Math.max(0, Math.min(100, parseInt(document.getElementById('jersey-tint-pct').value) || 80));
+  document.getElementById('jersey-tint-range').value = pct;
+  document.getElementById('jersey-tint-val').textContent = pct + '%';
+
+  S.jerseyImg.filters = (S.jerseyImg.filters || []).filter(f => f.type !== 'ColorOverlay');
+  if (on) {
+    S.jerseyImg.filters.push(new fabric.Image.filters.ColorOverlay({
+      color: '#' + hex,
+      intensity: pct / 100
+    }));
+  }
+  S.jerseyImg.applyFilters();
+  S.canvas.requestRenderAll();
+}
+
+function syncJerseyTintSlider() {
+  const v = document.getElementById('jersey-tint-range').value;
+  document.getElementById('jersey-tint-pct').value = v;
+  document.getElementById('jersey-tint-val').textContent = v + '%';
+  updateJerseyTint();
 }
 
 /* ── ADD TEXT ────────────────────────────────────── */
