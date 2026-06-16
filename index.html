@@ -649,24 +649,35 @@ function rebuildBackgroundJersey(url, W, H) {
 }
 
 /* ── JERSEY TINT ─────────────────────────────────── */
+// Uses a multiply-blend rect — no pixel manipulation, no CORS issues.
+// Multiply: white jersey → target color, dark areas stay dark.
+let jerseyTintRect = null;
+
 function updateJerseyTint() {
   const on  = document.getElementById('jersey-tint-on').checked;
   document.getElementById('jersey-tint-controls').style.display = on ? '' : 'none';
-  if (!S.jerseyImg) return;
 
-  const hex = document.getElementById('jersey-tint-color').value.replace('#','');
-  const pct = Math.max(0, Math.min(100, parseInt(document.getElementById('jersey-tint-pct').value) || 80));
+  if (jerseyTintRect) { S.canvas.remove(jerseyTintRect); jerseyTintRect = null; }
+  if (!on || !S.jerseyImg) return;
+
+  const color = document.getElementById('jersey-tint-color').value;
+  const pct   = Math.max(0, Math.min(100, parseInt(document.getElementById('jersey-tint-pct').value) || 80));
   document.getElementById('jersey-tint-range').value = pct;
   document.getElementById('jersey-tint-val').textContent = pct + '%';
 
-  S.jerseyImg.filters = (S.jerseyImg.filters || []).filter(f => f.type !== 'ColorOverlay');
-  if (on) {
-    S.jerseyImg.filters.push(new fabric.Image.filters.ColorOverlay({
-      color: '#' + hex,
-      intensity: pct / 100
-    }));
-  }
-  S.jerseyImg.applyFilters();
+  jerseyTintRect = new fabric.Rect({
+    left: 0, top: 0,
+    width:  S.canvas.width,
+    height: S.canvas.height,
+    fill:   color,
+    opacity: pct / 100,
+    globalCompositeOperation: 'multiply',
+    selectable: false, evented: false, hoverCursor: 'default',
+    excludeFromExport: false,
+  });
+
+  // Insert right above the jersey (index 1), below all user layers
+  S.canvas.insertAt(jerseyTintRect, 1);
   S.canvas.requestRenderAll();
 }
 
