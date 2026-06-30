@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 /* ── TOKENS ──────────────────────────────────────── */
 :root {
@@ -183,6 +184,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       <option value="2" selected>2× хорошо</option>
       <option value="3">3× макс</option>
     </select>
+    <button class="btn btn-ghost" onclick="openTeamBuilder()">👥 Team Builder</button>
     <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
     <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
     <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
@@ -239,13 +241,19 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       <button class="btn btn-panel" onclick="addText()">＋ Текст</button>
       <button class="btn btn-panel" onclick="addNumber()">＃ Номер</button>
     </div>
-    <label for="file-logo" class="uz">
+    <label for="file-badge" class="uz">
       <div class="ico">🏅</div>
-      <div>Загрузить логотип / эмблему</div>
-      <div style="font-size:10px;margin-top:2px;color:#444">PNG / JPG / SVG</div>
+      <div>Эмблема клуба</div>
+      <div style="font-size:10px;margin-top:2px;color:#444">PNG / JPG / SVG — левая грудь</div>
     </label>
-    <input type="file" id="file-logo" accept="image/*" onchange="addLogo(event)">
+    <input type="file" id="file-badge" accept="image/*" onchange="addBadge(event)">
     <button class="btn btn-panel" style="margin-top:6px" onclick="openLogoGallery()">🏆 Пресеты логотипов</button>
+    <label for="file-sponsor" class="uz" style="margin-top:8px">
+      <div class="ico">🤝</div>
+      <div>Спонсор</div>
+      <div style="font-size:10px;margin-top:2px;color:#444">PNG / JPG / SVG — центр груди</div>
+    </label>
+    <input type="file" id="file-sponsor" accept="image/*" onchange="addSponsor(event)">
   </div>
 
   <div class="sh">Шрифты</div>
@@ -419,6 +427,59 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
   </div>
   <div style="flex:1;overflow-y:auto;padding:20px">
     <div id="lm-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px"></div>
+  </div>
+</div>
+
+<!-- ══ TEAM BUILDER MODAL ══════════════════════════════ -->
+<div id="team-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:none;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
+    <h2 style="font-size:14px;font-weight:700">👥 Team Builder</h2>
+    <span style="font-size:11px;color:var(--muted);margin-right:auto">Badge &amp; sponsor from current design — name/number added per player</span>
+    <button class="btn btn-ghost" onclick="closeTeamBuilder()">✕ Close</button>
+  </div>
+  <div style="display:flex;flex:1;overflow:hidden">
+    <!-- LEFT: roster -->
+    <div style="width:320px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Squad</span>
+          <span id="tm-count" style="font-size:11px;color:var(--dim)">0 players</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <div class="fg" style="flex:1;margin:0">
+            <label>Name colour</label>
+            <input type="color" id="tm-name-color" value="#ffffff" oninput="schedulePreview()">
+          </div>
+          <div class="fg" style="flex:1;margin:0">
+            <label>Number colour</label>
+            <input type="color" id="tm-num-color" value="#ffffff" oninput="schedulePreview()">
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:8px 14px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border2)">
+              <th style="text-align:left;font-size:10px;color:var(--muted);font-weight:700;padding:4px 6px 8px;text-transform:uppercase;letter-spacing:.4px;width:56px">#</th>
+              <th style="text-align:left;font-size:10px;color:var(--muted);font-weight:700;padding:4px 6px 8px;text-transform:uppercase;letter-spacing:.4px">Name</th>
+              <th style="width:24px"></th>
+            </tr>
+          </thead>
+          <tbody id="tm-rows"></tbody>
+        </table>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <button class="btn btn-panel" style="flex:1" onclick="addPlayer()">＋ Add player</button>
+          <button class="btn btn-panel" style="flex:1" onclick="addDefaultSquad()">⚡ 11 default</button>
+        </div>
+      </div>
+    </div>
+    <!-- RIGHT: preview + generate -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Preview (first player)</div>
+      <img id="tm-preview-img" style="max-height:380px;max-width:100%;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.6);object-fit:contain" src="">
+      <div id="tm-progress" style="display:none;font-size:12px;color:var(--dim);text-align:center;min-height:18px"></div>
+      <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
+    </div>
   </div>
 </div>
 
@@ -723,18 +784,45 @@ function addNumber() {
   addText(true);
 }
 
-/* ── ADD LOGO/IMAGE ──────────────────────────────── */
-function addLogo(e) {
+/* ── ADD BADGE (team emblem — left chest) ────────── */
+function addBadge(e) {
   const file = e.target.files[0]; if (!file) return;
   const url  = URL.createObjectURL(file);
   fabric.Image.fromURL(url, img => {
-    const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.32;
+    const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.20;
     const scale = Math.min(maxD/img.width, maxD/img.height, 1);
     img.scale(scale);
-    img.set({ left: S.canvas.width/2, top: S.canvas.height/2, originX:'center', originY:'center' });
-    const id   = ++lc;
-    const name = `Лого: ${file.name.replace(/\.[^.]+$/,'')}`;
-    S.meta.set(img, { id, type:'image', name });
+    img.set({
+      left:    S.canvas.width  * 0.28,
+      top:     S.canvas.height * 0.28,
+      originX: 'center', originY: 'center',
+    });
+    const id = ++lc;
+    S.meta.set(img, { id, type:'image', name: `Эмблема: ${file.name.replace(/\.[^.]+$/,'')}` });
+    S.canvas.add(img);
+    S.canvas.setActiveObject(img);
+    S.canvas.requestRenderAll();
+    updateLayers();
+  });
+  e.target.value='';
+}
+
+/* ── ADD SPONSOR (center chest) ──────────────────── */
+function addSponsor(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const url  = URL.createObjectURL(file);
+  fabric.Image.fromURL(url, img => {
+    const maxW = S.canvas.width  * 0.38;
+    const maxH = S.canvas.height * 0.18;
+    const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+    img.scale(scale);
+    img.set({
+      left:    S.canvas.width  * 0.50,
+      top:     S.canvas.height * 0.50,
+      originX: 'center', originY: 'center',
+    });
+    const id = ++lc;
+    S.meta.set(img, { id, type:'image', name: `Спонсор: ${file.name.replace(/\.[^.]+$/,'')}` });
     S.canvas.add(img);
     S.canvas.setActiveObject(img);
     S.canvas.requestRenderAll();
@@ -1084,10 +1172,10 @@ function applyLogoPreset(logo) {
   closeLogoGallery();
   fabric.Image.fromURL(`logos/${logo.file}`, img => {
     if (!img) { showToast('Не удалось загрузить логотип'); return; }
-    const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.32;
+    const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.20;
     const scale = Math.min(maxD/img.width, maxD/img.height, 1);
     img.scale(scale);
-    img.set({ left: S.canvas.width/2, top: S.canvas.height/2, originX:'center', originY:'center' });
+    img.set({ left: S.canvas.width * 0.28, top: S.canvas.height * 0.28, originX:'center', originY:'center' });
     const id = ++lc;
     S.meta.set(img, { id, type:'image', name: `Лого: ${logo.name}` });
     S.canvas.add(img);
@@ -1095,6 +1183,163 @@ function applyLogoPreset(logo) {
     S.canvas.requestRenderAll();
     updateLayers();
   }, { crossOrigin: 'anonymous' });
+}
+
+/* ── TEAM BUILDER ────────────────────────────────── */
+const TB = { players: [] };
+let tmBaseURL = null;
+let previewTimer = null;
+
+function openTeamBuilder() {
+  if (!S.jerseyImg) { showToast('Load a jersey first'); return; }
+  document.getElementById('team-modal').style.display = 'flex';
+  tmBaseURL = getBaseDataURL();
+  if (!TB.players.length) addDefaultSquad();
+  else { renderRoster(); updatePreview(); }
+}
+
+function closeTeamBuilder() {
+  document.getElementById('team-modal').style.display = 'none';
+}
+
+function getBaseDataURL() {
+  const texts = S.canvas.getObjects().filter(o => o.selectable && (o.type==='text'||o.type==='i-text'));
+  texts.forEach(t => t.set('visible', false));
+  S.canvas.requestRenderAll();
+  const url = S.canvas.toDataURL({ format:'png', multiplier:1 });
+  texts.forEach(t => t.set('visible', true));
+  S.canvas.requestRenderAll();
+  return url;
+}
+
+function addPlayer(num='', name='') {
+  TB.players.push({ num, name });
+  renderRoster();
+  schedulePreview();
+}
+
+function removePlayer(i) {
+  TB.players.splice(i, 1);
+  renderRoster();
+  schedulePreview();
+}
+
+function addDefaultSquad() {
+  TB.players = Array.from({length:11}, (_,i) => ({ num:String(i+1), name:'' }));
+  renderRoster();
+  schedulePreview();
+}
+
+function renderRoster() {
+  const tbody = document.getElementById('tm-rows');
+  tbody.innerHTML = '';
+  TB.players.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border2)';
+    tr.innerHTML = `
+      <td style="padding:3px 6px">
+        <input class="fi" style="width:46px;text-align:center" value="${p.num}" placeholder="#"
+          oninput="TB.players[${i}].num=this.value;schedulePreview()">
+      </td>
+      <td style="padding:3px 6px">
+        <input class="fi" value="${p.name}" placeholder="NAME" style="text-transform:uppercase"
+          oninput="TB.players[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();schedulePreview()">
+      </td>
+      <td style="padding:3px 4px">
+        <button onclick="removePlayer(${i})"
+          style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1"
+          onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('tm-count').textContent = `${TB.players.length} players`;
+}
+
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(updatePreview, 280);
+}
+
+function updatePreview() {
+  if (!tmBaseURL) return;
+  const first = TB.players.find(p => p.num || p.name) || { num:'10', name:'PLAYER' };
+  renderPlayerCanvas(first, tmBaseURL, 1).then(url => {
+    document.getElementById('tm-preview-img').src = url;
+  });
+}
+
+function renderPlayerCanvas(player, baseURL, scale) {
+  return new Promise(resolve => {
+    const W = S.canvas.width;
+    const H = S.canvas.height;
+    const nameColor = document.getElementById('tm-name-color').value;
+    const numColor  = document.getElementById('tm-num-color').value;
+    const tmp = new fabric.StaticCanvas(null, { width:W, height:H });
+
+    fabric.Image.fromURL(baseURL, img => {
+      img.scaleToWidth(W);
+      tmp.add(img);
+
+      if (player.name) {
+        tmp.add(new fabric.Text(player.name.toUpperCase(), {
+          left: W/2, top: H*0.39,
+          originX:'center', originY:'center',
+          fontSize: Math.round(W*0.062),
+          fontFamily:'Inter', fontWeight:'bold',
+          fill: nameColor, charSpacing: 160,
+        }));
+      }
+
+      if (player.num) {
+        tmp.add(new fabric.Text(String(player.num), {
+          left: W/2, top: H*0.60,
+          originX:'center', originY:'center',
+          fontSize: Math.round(W*0.21),
+          fontFamily:'Inter', fontWeight:'bold',
+          fill: numColor,
+        }));
+      }
+
+      tmp.requestRenderAll();
+      const url = tmp.toDataURL({ format:'png', multiplier: scale });
+      tmp.dispose();
+      resolve(url);
+    });
+  });
+}
+
+async function generateTeamZip() {
+  const valid = TB.players.filter(p => p.num || p.name);
+  if (!valid.length) { showToast('Add players first'); return; }
+
+  const btn  = document.getElementById('tm-gen-btn');
+  const prog = document.getElementById('tm-progress');
+  btn.disabled = true;
+  prog.style.display = '';
+  tmBaseURL = getBaseDataURL();
+
+  const zip = new JSZip();
+  for (let i=0; i<valid.length; i++) {
+    const p = valid[i];
+    prog.textContent = `Generating ${i+1} / ${valid.length}…`;
+    await new Promise(r => setTimeout(r, 0));
+    const dataURL = await renderPlayerCanvas(p, tmBaseURL, 2);
+    const b64  = dataURL.split(',')[1];
+    const name = `${String(p.num||i+1).padStart(2,'0')}_${(p.name||'PLAYER').replace(/\s+/g,'_')}.png`;
+    zip.file(name, b64, { base64:true });
+  }
+
+  prog.textContent = 'Zipping…';
+  const blob = await zip.generateAsync({ type:'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'derby-team-jerseys.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  prog.style.display = 'none';
+  btn.disabled = false;
+  showToast(`✅ Downloaded ${valid.length} jerseys`);
 }
 
 /* ── KEYBOARD ────────────────────────────────────── */
