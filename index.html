@@ -1333,7 +1333,8 @@ async function generateTeamZip() {
   const blob = await zip.generateAsync({ type:'blob' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'derby-team-jerseys.zip';
+  const uid = Math.random().toString(36).slice(2,8).toUpperCase();
+  a.download = `derby-team-${uid}.zip`;
   a.click();
   URL.revokeObjectURL(a.href);
 
