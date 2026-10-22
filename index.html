@@ -437,6 +437,10 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <span class="rv" id="prop-angle-val">0°</span>
         </div>
       </div>
+      <div class="tgl-row" style="margin:4px 0 8px">
+        <span class="tgl-label">Чёрная подложка</span>
+        <label class="tgl"><input type="checkbox" id="prop-plate" onchange="updatePlate()"><span class="tgl-slider"></span></label>
+      </div>
       <hr class="sep" style="margin-bottom:8px">
       <div class="btn-row">
         <button class="btn btn-ghost" onclick="layerUp()">↑ Вверх</button>
@@ -622,6 +626,73 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
 // 2D implementation, and fabric's default WebGL backend would skip it.
 fabric.filterBackend = new fabric.Canvas2dFilterBackend();
 
+/* ── PLATE ───────────────────────────────────────────
+   obj.plate = '#111111' draws a rounded rectangle behind the object (text,
+   logo, badge) so it stays readable on busy kits such as striped shirts.
+─────────────────────────────────────────────────── */
+fabric.Object.prototype.plate = null;
+{
+  const renderBg = fabric.Object.prototype._renderBackground;
+  fabric.Object.prototype._renderBackground = function(ctx) {
+    if (!this.plate) return renderBg.call(this, ctx);
+    const w = this.width, h = this.height;
+    const base = this.fontSize || Math.min(w, h) * 0.5;   // text: em size; images: half the short side
+    // Text: hug the visible letters (plateBox, measured by tmFitPlate), not the line box
+    const b = this.plateBox || { x0: -w/2, y0: -h/2, x1: w/2, y1: h/2 };
+    const px = base * (this.plateBox ? 0.3 : 0.45), py = base * (this.plateBox ? 0.2 : 0.22), r = base * 0.16;
+    ctx.save();
+    ctx.fillStyle = this.plate;
+    ctx.beginPath();
+    ctx.roundRect(b.x0 - px, b.y0 - py, b.x1 - b.x0 + 2*px, b.y1 - b.y0 + 2*py, r);
+    ctx.fill();
+    ctx.restore();
+  };
+  // The plate reaches past the object's box, which its render cache would clip
+  const shouldCache = fabric.Object.prototype.shouldCache;
+  fabric.Object.prototype.shouldCache = function() {
+    if (this.plate) { this.ownCaching = false; return false; }
+    return shouldCache.call(this);
+  };
+}
+
+// Measure a text's visible letters (in its own unscaled units) for a snug plate
+function tmFitPlate(obj) {
+  if (!obj.plate || obj.text === undefined) { obj.plateBox = null; return; }
+  const { plate, angle } = obj;
+  obj.set({ plate: null, angle: 0, plateBox: null });
+  const el = obj.toCanvasElement();
+  obj.set({ plate, angle });
+  const d = el.getContext('2d').getImageData(0, 0, el.width, el.height).data;
+  let x0 = el.width, y0 = el.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < el.height; y++) for (let x = 0; x < el.width; x++) {
+    if (d[(y * el.width + x) * 4 + 3] > 30) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  if (x1 < 0) return;
+  const sx = el.width / obj.width, sy = el.height / obj.height;
+  obj.plateBox = { x0: x0 / sx - obj.width / 2, y0: y0 / sy - obj.height / 2,
+                   x1: (x1 + 1) / sx - obj.width / 2, y1: (y1 + 1) / sy - obj.height / 2 };
+  obj.dirty = true;
+}
+
+// Dark outline that follows a logo's shape (a dilated silhouette), as a canvas
+function tmMakeOutline(el, r, color = '#111111') {
+  const w = el.width || el.naturalWidth, h = el.height || el.naturalHeight;
+  const sil = document.createElement('canvas'); sil.width = w; sil.height = h;
+  const sx = sil.getContext('2d');
+  sx.drawImage(el, 0, 0, w, h);
+  sx.globalCompositeOperation = 'source-in';
+  sx.fillStyle = color; sx.fillRect(0, 0, w, h);
+  const p = Math.ceil(r) + 2;
+  const out = document.createElement('canvas'); out.width = w + 2*p; out.height = h + 2*p;
+  const ox = out.getContext('2d');
+  for (let i = 0; i < 32; i++) {
+    const a = i / 32 * Math.PI * 2;
+    ox.drawImage(sil, p + Math.cos(a) * r, p + Math.sin(a) * r);
+  }
+  ox.drawImage(sil, p, p);
+  return out;
+}
+
 /* ── CUSTOM FILTER: ColorOverlay ─────────────────────
    Works like Photoshop's "Color Overlay" layer style:
    every pixel takes the target color, alpha is kept.
@@ -680,7 +751,7 @@ let lc = 0; // layer counter
 /* ── UNDO / REDO ─────────────────────────────────── */
 // Snapshots of the whole canvas. Rather than hooking every edit, we compare the
 // serialized canvas shortly after each render and record it when it changed.
-const HISTORY_PROPS = ['selectable','evented','hoverCursor','charSpacing','tmKeep','layerName'];
+const HISTORY_PROPS = ['selectable','evented','hoverCursor','charSpacing','tmKeep','plate','plateBox','layerName'];
 const History = {
   stack: [], idx: -1, timer: null, restoring: false,
 
@@ -1148,6 +1219,7 @@ function syncProps() {
   const ang = Math.round(obj.angle ?? 0);
   document.getElementById('prop-angle').value               = ang;
   document.getElementById('prop-angle-val').textContent     = ang+'°';
+  document.getElementById('prop-plate').checked = !!obj.plate;
 }
 
 function clearProps() {
@@ -1181,19 +1253,29 @@ function updateProp(prop) {
     document.getElementById('prop-angle-val').textContent = v+'°';
   }
 
+  if (obj.plate) tmFitPlate(obj);   // letters changed → plate follows
   S.canvas.requestRenderAll();
 }
 
 /* ── IMAGE COLOR TINTING ─────────────────────────── */
-// A logo layer is either an image or a badge group (backing circle + image)
+// A logo layer is an image, or a group: badge (circle + image) or outlined logo
+// (outline image + image). The logo itself is always the group's last image.
 function logoImageOf(obj) {
   if (!obj) return null;
   if (obj.type === 'image') return obj;
-  if (obj.type === 'group') return obj.getObjects().find(o => o.type === 'image') || null;
+  if (obj.type === 'group') return obj.getObjects().filter(o => o.type === 'image').pop() || null;
   return null;
 }
 function badgeCircleOf(obj) {
   return obj && obj.type === 'group' ? obj.getObjects().find(o => o.type === 'circle') || null : null;
+}
+
+function updatePlate() {
+  const obj = S.canvas.getActiveObject(); if (!obj) return;
+  obj.set('plate', document.getElementById('prop-plate').checked ? '#111111' : null);
+  tmFitPlate(obj);
+  obj.dirty = true;
+  S.canvas.requestRenderAll();
 }
 
 function updateBadgeFill() {
@@ -1285,7 +1367,7 @@ function duplicateSelected(src) {
     S.canvas.requestRenderAll();
     syncProps();
     updateLayers();
-  }, ['tmKeep']);
+  }, ['tmKeep', 'plate', 'plateBox']);
 }
 function layerUp()   { const o=S.canvas.getActiveObject(); if(o){S.canvas.bringForward(o);S.canvas.requestRenderAll();updateLayers();} }
 function layerDown() { const o=S.canvas.getActiveObject(); if(o){S.canvas.sendBackwards(o);S.canvas.requestRenderAll();updateLayers();} }
@@ -1349,7 +1431,7 @@ function exportCanvas() {
 /* ── SAVE / LOAD ──────────────────────────────────── */
 function saveProject() {
   try {
-    const json = S.canvas.toJSON(['selectable','evented','hoverCursor','charSpacing','tmKeep']);
+    const json = S.canvas.toJSON(['selectable','evented','hoverCursor','charSpacing','tmKeep','plate','plateBox']);
     localStorage.setItem('derby_proj',  JSON.stringify(json));
     localStorage.setItem('derby_size',  JSON.stringify({ w:S.canvas.width, h:S.canvas.height }));
     showToast('Проект сохранён');
@@ -1389,10 +1471,12 @@ function loadProject() {
 const LOGO_AREA_NAMES = { chest: 'грудь', shorts: 'шорты' };
 
 // Default kit texts, positioned like a real printed kit (units of D = shoulder→armpit):
-// sponsor on the front at 1.0·D, slogan on the back at 1.70·D (below the number)
+// sponsor on the front (SARAISHYQ / BILIM block centred at 1.0·D),
+// slogan on the back at 1.70·D (below the number). font: null → Team Builder number font
 const KIT_TEXTS = [
-  { side: 'front', text: 'SARAISHYQ\nBILIM', y: 1.0,  cap: 0.095, font: 'MontserratSemiBold', spacing: 40, name: 'Спонсор' },
-  { side: 'back',  text: 'MEZUNS’27',        y: 1.70, cap: 0.14,  font: null,                 spacing: 40, name: 'Надпись на спине' },
+  { side: 'front', text: 'SARAISHYQ\nBILIM', y: 1.0, cap: 0.095, font: 'Kursk205W00Medium', weight: 'normal', spacing: 40, name: 'Спонсор',
+    line2: { font: 'Kursk205W00Light', cap: 0.083 } },   // BILIM: lighter and a bit smaller
+  { side: 'back',  text: 'MEZUNS’27', y: 1.70, cap: 0.14,  font: null, weight: 'bold', spacing: 40, name: 'Надпись на спине' },
 ];
 
 function addKitTexts() {
@@ -1403,21 +1487,28 @@ function addKitTexts() {
   const pickFont = f => fonts.includes(f) ? f : 'Inter';
   KIT_TEXTS.forEach(t => {
     const kit = t.side === 'front' ? front : back;
-    const shirtC  = tmSampleKit(kit.cx, kit.top + 0.9 * kit.D, 0.12 * kit.D);
     const legs    = kit.shortsAt(kit.hem - 0.27 * kit.D);
-    const shortsC = tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), kit.hem - 0.27 * kit.D, 0.1 * kit.D);
+    const shortsC = tmCleanColor(tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), kit.hem - 0.27 * kit.D, 0.1 * kit.D));
+    // Caps are ≈0.72 em tall in these fonts
+    const styles = {};
+    if (t.line2) {
+      const l2 = t.text.split('\n')[1] || '';
+      styles[1] = {};
+      [...l2].forEach((_, i) => styles[1][i] = { fontFamily: pickFont(t.line2.font), fontSize: Math.round(t.line2.cap * kit.D / 0.72) });
+    }
     const obj = new fabric.Text(t.text, {
       left: kit.cx, top: kit.top + t.y * kit.D,
       originX: 'center', originY: 'center', textAlign: 'center',
-      // Caps are ≈0.72 em tall in these fonts
       fontSize: Math.round(t.cap * kit.D / 0.72), lineHeight: 1.05,
       fontFamily: pickFont(t.font || document.getElementById('tm-num-font').value || TM_DEFAULT_FONT),
-      fontWeight: 'bold', charSpacing: t.spacing,
-      fill: S.kitTextColor || tmLogoColor(shirtC, shortsC),
+      fontWeight: t.weight, charSpacing: t.spacing, styles,
     });
     obj.tmKeep = true;   // keep it in Team Builder exports
     const maxW = kit.torsoW * 0.8;
     if (obj.width > maxW) obj.scale(maxW / obj.width);
+    const { color, plate } = tmChooseColor(obj.getBoundingRect(true, true), shortsC);
+    obj.set({ fill: color, plate });
+    tmFitPlate(obj);
     S.meta.set(obj, { id: ++lc, type: 'text', name: `${t.name}: ${t.text.replace('\n', ' ')}` });
     S.canvas.add(obj);
   });
@@ -1427,18 +1518,64 @@ function addKitTexts() {
 }
 
 // Median colour of the jersey image in a square around (x, y), canvas units
-function tmSampleKit(x, y, r) {
+// Jersey pixels at canvas size, cached per jersey image
+function tmKitPixels() {
   const el = S.jerseyImg.getElement();
   const W = S.canvas.width, H = S.canvas.height;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const c = S._kitPx;
+  if (c && c.el === el && c.W === W && c.H === H) return c;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(el, 0, 0, W, H);
+  return S._kitPx = { el, W, H, data: ctx.getImageData(0, 0, W, H).data };
+}
+
+// Photos shade white kits grey and black kits charcoal: treat colourless light or
+// dark samples as pure white / near-black so derived colours look clean
+function tmCleanColor(c) {
+  const mx = Math.max(...c), mn = Math.min(...c);
+  if (mx - mn < 45 && mn > 150) return [255, 255, 255];
+  if (mx - mn < 30 && mx < 70)  return [17, 17, 17];
+  return c;
+}
+
+function tmSampleKit(x, y, r) {
+  const { W, H, data } = tmKitPixels();
   const x0 = Math.max(0, Math.round(x - r)), y0 = Math.max(0, Math.round(y - r));
-  const s = Math.max(1, Math.round(2 * r));
-  const d = ctx.getImageData(x0, y0, Math.min(s, W - x0), Math.min(s, H - y0)).data;
+  const x1 = Math.min(W, Math.round(x + r)), y1 = Math.min(H, Math.round(y + r));
   const ch = [[], [], []];
-  for (let i = 0; i < d.length; i += 4) { ch[0].push(d[i]); ch[1].push(d[i+1]); ch[2].push(d[i+2]); }
+  for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
+    const i = (yy * W + xx) * 4; ch[0].push(data[i]); ch[1].push(data[i+1]); ch[2].push(data[i+2]);
+  }
+  if (!ch[0].length) return [255, 255, 255];
   return ch.map(a => a.sort((p, q) => p - q)[a.length >> 1]);
+}
+
+// Share of the kit under `rect` that a colour stands out on (contrast ≥ 2)
+function tmReadability(rect, rgb) {
+  const { W, H, data } = tmKitPixels();
+  const lum = c => { const v = c.map(x => { x /= 255; return x <= 0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055, 2.4); }); return 0.2126*v[0] + 0.7152*v[1] + 0.0722*v[2]; };
+  const L = lum(rgb);
+  let ok = 0, n = 0;
+  const x0 = Math.max(0, Math.round(rect.left)), x1 = Math.min(W, Math.round(rect.left + rect.width));
+  const y0 = Math.max(0, Math.round(rect.top)),  y1 = Math.min(H, Math.round(rect.top + rect.height));
+  for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) {
+    const i = (y * W + x) * 4;
+    const l2 = lum([data[i], data[i+1], data[i+2]]);
+    const k = (Math.max(L, l2) + 0.05) / (Math.min(L, l2) + 0.05);
+    if (k >= 2) ok++;
+    n++;
+  }
+  return n ? ok / n : 1;
+}
+
+// Colour for an auto-placed item covering `rect`: club colour, then the kit's other
+// colour, then white/black — the first one that reads on almost all of the area.
+// If none does (e.g. striped shirts), white on a black plate.
+function tmChooseColor(rect, other) {
+  const cands = [S.kitTextColor, tmRgbToHex(other), '#ffffff', '#111111'].filter(Boolean);
+  const hit = cands.find(c => tmReadability(rect, tmHexToRgb(c)) >= 0.85);
+  return hit ? { color: hit, plate: null } : { color: '#ffffff', plate: '#111111' };
 }
 
 // Use the kit's other colour (red logo on white shorts, white logo on red shirt);
@@ -1448,52 +1585,56 @@ function tmLogoColor(area, other) {
   return tmContrast([255,255,255], area) >= tmContrast([17,17,17], area) ? '#ffffff' : '#111111';
 }
 
-// Colour for the circle behind a see-through badge: must differ from both the
-// garment and the logo. Prefer the kit's other colour, else a shade of the garment.
-function tmBadgeFill(area, logoHex, other) {
+// Colour for the circle behind a see-through badge: it sits inside the badge ring,
+// so it only has to stand out from the logo. Kit's other colour, else the garment's own
+// colour (yellow on BVB, red on Man U), else white, else black.
+function tmBadgeFill(logoHex, other, area) {
   const logo = tmHexToRgb(logoHex);
-  const shade = (c, k) => c.map(v => k < 0 ? v * (1 + k) : v + (255 - v) * k);
-  const cands = [other, shade(area, -0.45), shade(area, 0.45), shade(area, -0.7)];
-  const ok = c => tmContrast(c, logo) >= 2 && tmContrast(c, area) >= 1.3;
-  return tmRgbToHex(cands.find(ok) || shade(area, -0.45));
+  const hit = [other, area, [255,255,255], [17,17,17]].find(c => tmContrast(c, logo) >= 2);
+  return tmRgbToHex(hit || [255,255,255]);
 }
 
 function placeLogoOnKit(logo, kit) {
   const { cx, top, D, torsoW, hem, shortsAt } = kit;
   const shortsY = hem - 0.27 * D;
   const legs = shortsAt(shortsY);
-  const shirtC  = tmSampleKit(cx, top + 0.9 * D, 0.12 * D);
-  const shortsC = tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), shortsY, 0.1 * D);
+  const shirtC  = tmCleanColor(tmSampleKit(cx, top + 0.9 * D, 0.12 * D));
+  const shortsC = tmCleanColor(tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), shortsY, 0.1 * D));
   logo.placements.forEach(pl => {
     fabric.Image.fromURL(`logos/${logo.file}`, img => {
       if (!img) { showToast('Не удалось загрузить логотип'); return; }
-      let x, y, color;
-      if (pl.area === 'shorts') {
-        y = shortsY;
-        x = legs.l + pl.x * (legs.r - legs.l);
-        color = tmLogoColor(shortsC, shirtC);
-      } else {
-        y = top + 0.58 * D;
-        x = cx + pl.x * torsoW;
-        color = tmLogoColor(shirtC, shortsC);
-      }
+      let x, y;
+      if (pl.area === 'shorts') { y = shortsY;            x = legs.l + pl.x * (legs.r - legs.l); }
+      else                      { y = top + 0.58 * D;    x = cx + pl.x * torsoW; }
+      const h = pl.size * D, w = h * img.width / img.height;
+      const { color, plate } = tmChooseColor({ left: x - w/2, top: y - h/2, width: w, height: h },
+                                             pl.area === 'shorts' ? shirtC : shortsC);
       img.filters = [new fabric.Image.filters.ColorOverlay({ color, intensity: 1 })];
       img.applyFilters();
       let layer = img;
       if (logo.badgeFill) {
         // Fill the see-through parts (the dove) with a third colour so the badge stands out
-        const area = pl.area === 'shorts' ? shortsC : shirtC;
         const other = pl.area === 'shorts' ? shirtC : shortsC;
         const circle = new fabric.Circle({
           radius: Math.min(img.width, img.height) * 0.48,
-          fill: tmBadgeFill(area, color, other),
+          fill: tmBadgeFill(color, other, tmCleanColor(tmSampleKit(x, y, 0.1 * D))),
           originX: 'center', originY: 'center', left: 0, top: 0,
         });
         img.set({ originX: 'center', originY: 'center', left: 0, top: 0 });
         layer = new fabric.Group([circle, img], { originX: 'center', originY: 'center' });
       }
-      layer.scaleToHeight(pl.size * D);
-      layer.set({ left: x, top: y, originX:'center', originY:'center' });
+      let size = pl.size * D, layerPlate = plate;
+      if (plate && !logo.badgeFill) {
+        // Unreadable spot: a dark stroke around the logo's own shape instead of a box
+        const out = tmMakeOutline(img.getElement(), Math.min(img.width, img.height) * 0.07, plate);
+        const outline = new fabric.Image(out, { originX: 'center', originY: 'center', left: 0, top: 0 });
+        img.set({ originX: 'center', originY: 'center', left: 0, top: 0 });
+        size *= out.height / img.height;   // keep the logo itself at its usual size
+        layer = new fabric.Group([outline, img], { originX: 'center', originY: 'center' });
+        layerPlate = null;
+      }
+      layer.scaleToHeight(size);
+      layer.set({ left: x, top: y, originX:'center', originY:'center', plate: layerPlate });
       const id = ++lc;
       S.meta.set(layer, { id, type:'image', name: `Лого: ${logo.name} (${LOGO_AREA_NAMES[pl.area] || pl.area})` });
       S.canvas.add(layer);
@@ -1867,7 +2008,7 @@ async function tmAutoPlace(silent) {
   tmDesignColors().forEach(col => { const k = tmContrast(col, shirt); if (k > best) { best = k; pick = col; } });
   if (!pick || best < 2.5) pick = tmContrast([255,255,255], shirt) >= tmContrast([0,0,0], shirt) ? [255,255,255] : [17,17,17];
   // A gallery kit with a known club print colour wins over the guess
-  const hex = S.kitTextColor || tmRgbToHex(pick);
+  const hex = S.kitTextColor && tmContrast(tmHexToRgb(S.kitTextColor), shirt) >= 2 ? S.kitTextColor : tmRgbToHex(pick);
   document.getElementById('tm-name-color').value = hex;
   document.getElementById('tm-num-color').value  = hex;
 
