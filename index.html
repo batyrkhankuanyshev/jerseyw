@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <style>
 /* ── TOKENS ──────────────────────────────────────── */
 :root {
@@ -81,6 +82,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 .fi:focus,.fs:focus{border-color:rgba(200,241,53,.4)}
 .fs{cursor:pointer}.fs option{background:#161616}
 .fr{display:flex;gap:6px}.fr .fg{flex:1}
+/* Colour + HEX + eyedropper needs the full width of the narrow side panels */
+.fr:has(.hexpick){flex-direction:column;gap:0}
 input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-radius:4px;width:100%;height:30px;padding:2px 4px;background:var(--panel2);cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
@@ -100,6 +103,8 @@ input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
 .fpick-item .n{display:block;font-family:Inter,sans-serif;font-size:10px;color:var(--muted)}
 .hexpick input[type=color]{width:30px;flex:none}
 .hexpick .fi{flex:1;min-width:0;font-family:monospace;text-transform:uppercase}
+.hexpick .eyedrop{width:30px;flex:none;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:0}
+.hexpick .eyedrop:hover{border-color:rgba(200,241,53,.4);color:var(--text)}
 input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;margin:4px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--accent);border-radius:50%;cursor:pointer}
 .rr{display:flex;align-items:center;gap:8px}.rr input{flex:1}
@@ -224,6 +229,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     <button class="btn btn-ghost" id="undo-btn" onclick="History.undo()" title="Отменить (⌘Z)" disabled>↶</button>
     <button class="btn btn-ghost" id="redo-btn" onclick="History.redo()" title="Повторить (⇧⌘Z)" disabled>↷</button>
     <button class="btn btn-ghost" onclick="openTeamBuilder()">👥 Team Builder</button>
+    <button class="btn btn-ghost" onclick="openCloud()" title="Проекты в облаке — доступны на любом устройстве">☁️ Мои проекты</button>
     <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
     <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
     <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
@@ -483,6 +489,16 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
   <div style="flex:1;overflow-y:auto;padding:20px">
     <div id="lm-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px"></div>
   </div>
+</div>
+
+<!-- ══ CLOUD PROJECTS MODAL ════════════════════════════ -->
+<div id="cloud-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:none;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
+    <h2 style="font-size:14px;font-weight:700;margin-right:auto">☁️ Мои проекты</h2>
+    <span id="cloud-user" style="font-size:11px;color:var(--dim)"></span>
+    <button class="btn btn-ghost" onclick="closeCloud()">✕ Закрыть</button>
+  </div>
+  <div id="cloud-body" style="flex:1;overflow-y:auto;padding:20px"></div>
 </div>
 
 <!-- ══ TEAM BUILDER MODAL ══════════════════════════════ -->
@@ -785,24 +801,7 @@ const History = {
   restore(i) {
     this.restoring = true;
     clearTimeout(this.timer);
-    const { w, h, json } = JSON.parse(this.stack[i]);
-    S.meta.clear();
-    initCanvas(w, h);
-    S.canvas.loadFromJSON(json, () => {
-      const objs = S.canvas.getObjects();
-      S.jerseyImg    = objs.find(o => o.type === 'image' && o.selectable === false) || null;
-      jerseyTintRect = objs.find(o => o.type === 'rect'  && o.selectable === false) || null;
-      document.getElementById('jersey-tint-on').checked = !!jerseyTintRect;
-      document.getElementById('jersey-tint-controls').style.display = jerseyTintRect ? '' : 'none';
-      objs.forEach(o => {
-        if (o.selectable === false) return;
-        const isText = o.type === 'text' || o.type === 'i-text';
-        S.meta.set(o, { id: ++lc, type: isText ? 'text' : 'image', name: o.layerName || (isText ? `Текст: ${o.text}` : 'Изображение') });
-      });
-      document.getElementById('canvas-placeholder').style.opacity = S.jerseyImg ? '0' : '';
-      clearProps();
-      updateLayers();
-      S.canvas.requestRenderAll();
+    loadCanvasState(JSON.parse(this.stack[i]), () => {
       // Let the restore render settle before watching for changes again
       setTimeout(() => { this.restoring = false; this.updateButtons(); }, 0);
     });
@@ -812,6 +811,29 @@ const History = {
     document.getElementById('redo-btn').disabled = this.idx >= this.stack.length - 1;
   },
 };
+
+// Rebuild the canvas from a serialized state (undo/redo, cloud projects)
+function loadCanvasState({ w, h, json }, done) {
+  S.meta.clear();
+  initCanvas(w, h);
+  S.canvas.loadFromJSON(json, () => {
+    const objs = S.canvas.getObjects();
+    S.jerseyImg    = objs.find(o => o.type === 'image' && o.selectable === false) || null;
+    jerseyTintRect = objs.find(o => o.type === 'rect'  && o.selectable === false) || null;
+    document.getElementById('jersey-tint-on').checked = !!jerseyTintRect;
+    document.getElementById('jersey-tint-controls').style.display = jerseyTintRect ? '' : 'none';
+    objs.forEach(o => {
+      if (o.selectable === false) return;
+      const isText = o.type === 'text' || o.type === 'i-text';
+      S.meta.set(o, { id: ++lc, type: isText ? 'text' : 'image', name: o.layerName || (isText ? `Текст: ${o.text}` : 'Изображение') });
+    });
+    document.getElementById('canvas-placeholder').style.opacity = S.jerseyImg ? '0' : '';
+    clearProps();
+    updateLayers();
+    S.canvas.requestRenderAll();
+    done && done();
+  });
+}
 
 /* ── INIT CANVAS ─────────────────────────────────── */
 // Show the canvas scaled down to fit its area (phones, small windows).
@@ -853,6 +875,7 @@ function initCanvas(w=600, h=700) {
   fitCanvas();
 }
 initCanvas();
+History.record();   // the empty start, so the first change can be undone
 
 /* ── GALLERY ─────────────────────────────────────── */
 async function loadGalleryManifest() {
@@ -2405,6 +2428,188 @@ async function downloadOrderPdf() {
   }
 }
 
+/* ── CLOUD PROJECTS (Supabase) ───────────────────── */
+// Projects live in the `projects` table (see supabase/setup.sql); row-level
+// security lets each account see only its own rows. The login is remembered
+// by the browser, so it's asked for once per device.
+const SUPABASE_URL = 'https://wcuesadcvkklhapvhdkr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ISKIvDjqivS2jO0R0Ld2aw_Rw6nZxWc';   // public by design
+const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const Cloud = { user: null, list: [], busy: false, error: '', info: '' };
+S.cloudId = null; S.cloudName = '';
+
+if (sb) {
+  sb.auth.getSession().then(({ data }) => { Cloud.user = data.session?.user || null; renderCloud(); });
+  sb.auth.onAuthStateChange((_, session) => {
+    Cloud.user = session?.user || null;
+    if (Cloud.user) loadCloudList(); else { Cloud.list = []; renderCloud(); }
+  });
+}
+
+function openCloud() {
+  document.getElementById('cloud-modal').style.display = 'flex';
+  Cloud.error = Cloud.info = '';
+  if (Cloud.user) loadCloudList(); else renderCloud();
+}
+function closeCloud() { document.getElementById('cloud-modal').style.display = 'none'; }
+
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+function renderCloud() {
+  const body = document.getElementById('cloud-body');
+  document.getElementById('cloud-user').innerHTML = Cloud.user
+    ? `${esc(Cloud.user.email)} · <a href="#" onclick="cloudSignOut();return false" style="color:var(--dim)">Выйти</a>` : '';
+  const msg = (Cloud.error ? `<div style="color:var(--danger);font-size:12px;margin:10px 0">${esc(Cloud.error)}</div>` : '')
+            + (Cloud.info  ? `<div style="color:var(--accent);font-size:12px;margin:10px 0">${esc(Cloud.info)}</div>` : '');
+  if (!sb) { body.innerHTML = '<p style="color:var(--dim)">Не удалось загрузить облачный модуль. Проверьте интернет и обновите страницу.</p>'; return; }
+
+  if (!Cloud.user) {
+    body.innerHTML = `
+      <div style="max-width:360px;margin:40px auto;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:22px">
+        <h3 style="font-size:16px;margin-bottom:6px">Вход</h3>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:14px">Войдите один раз — браузер запомнит вас. Проекты будут доступны на любом устройстве.</p>
+        <div class="fg"><label>Email</label><input class="fi" id="cl-email" type="email" autocomplete="email"></div>
+        <div class="fg"><label>Пароль (от 6 символов)</label><input class="fi" id="cl-pass" type="password" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')cloudSignIn()"></div>
+        ${msg}
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-primary" style="flex:1" onclick="cloudSignIn()" ${Cloud.busy ? 'disabled' : ''}>Войти</button>
+          <button class="btn btn-panel" style="flex:1;margin:0" onclick="cloudSignUp()" ${Cloud.busy ? 'disabled' : ''}>Создать аккаунт</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const cards = Cloud.list.map(p => `
+    <div class="gm-card" style="cursor:default">
+      ${p.thumb ? `<img src="${p.thumb}" style="aspect-ratio:4/5;object-fit:contain;background:#fff">` : '<div style="aspect-ratio:4/5;background:var(--panel2)"></div>'}
+      <div style="padding:8px 10px">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}${p.id === S.cloudId ? ' <span style="color:var(--accent)">•</span>' : ''}</div>
+        <div style="font-size:10px;color:var(--muted);margin:2px 0 8px">${new Date(p.updated_at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary" style="flex:1;padding:6px" onclick="cloudOpen('${p.id}')">Открыть</button>
+          <button class="btn btn-ghost" style="padding:6px 8px" title="Удалить" onclick="cloudDelete('${p.id}')">🗑</button>
+        </div>
+      </div>
+    </div>`).join('');
+  body.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+      <div class="fg" style="flex:1;min-width:200px;margin:0"><label>Название проекта</label>
+        <input class="fi" id="cl-name" value="${esc(S.cloudName || 'Проект ' + new Date().toLocaleDateString('ru-RU'))}"></div>
+      <button class="btn btn-primary" onclick="cloudSave(false)" ${Cloud.busy ? 'disabled' : ''}>💾 ${S.cloudId ? 'Сохранить изменения' : 'Сохранить в облако'}</button>
+      ${S.cloudId ? `<button class="btn btn-panel" style="width:auto;margin:0" onclick="cloudSave(true)" ${Cloud.busy ? 'disabled' : ''}>Сохранить как новый</button>` : ''}
+    </div>
+    ${msg}
+    ${Cloud.list.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px">${cards}</div>`
+                        : '<p style="color:var(--dim);font-size:13px">Пока нет сохранённых проектов.</p>'}`;
+}
+
+async function cloudAuth(fn) {
+  const email = document.getElementById('cl-email').value.trim();
+  const password = document.getElementById('cl-pass').value;
+  if (!email || password.length < 6) { Cloud.error = 'Введите email и пароль от 6 символов'; renderCloud(); return; }
+  Cloud.busy = true; Cloud.error = Cloud.info = ''; renderCloud();
+  const { data, error } = await fn(email, password);
+  Cloud.busy = false;
+  if (error) Cloud.error = error.message;
+  else if (!data.session) Cloud.info = 'Аккаунт создан. Подтвердите email по ссылке из письма, затем войдите.';
+  renderCloud();
+}
+const cloudSignIn = () => cloudAuth((email, password) => sb.auth.signInWithPassword({ email, password }));
+const cloudSignUp = () => cloudAuth((email, password) => sb.auth.signUp({
+  email, password, options: { emailRedirectTo: location.origin + location.pathname } }));
+async function cloudSignOut() { await sb.auth.signOut(); S.cloudId = null; S.cloudName = ''; }
+
+async function loadCloudList() {
+  const { data, error } = await sb.from('projects').select('id,name,thumb,updated_at').order('updated_at', { ascending: false });
+  Cloud.error = error ? error.message : Cloud.error;
+  Cloud.list = data || [];
+  renderCloud();
+}
+
+// Team Builder settings that belong to a design
+const TM_SAVED_SLIDERS = ['tm-x','tm-name-y','tm-num-y','tm-name-size','tm-num-size','tm-num-spacing'];
+const TM_SAVED_FIELDS  = ['tm-name-color','tm-num-color','tm-name-font','tm-num-font'];
+
+// Images the user uploaded only exist in this browser (blob: URLs), so they are
+// embedded in the saved project, downscaled to keep it light.
+async function embedLocalImages(json) {
+  const jerseySrc = S.jerseyImg && S.jerseyImg.getSrc();
+  const walk = async objs => {
+    for (const o of objs || []) {
+      if (o.objects) await walk(o.objects);
+      if (o.type !== 'image' || !String(o.src).startsWith('blob:')) continue;
+      const isJersey = o.src === jerseySrc;
+      const img = new Image(); img.src = o.src; await img.decode();
+      const k = Math.min(1, (isJersey ? 2200 : 1000) / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      o.src = isJersey ? c.toDataURL('image/jpeg', 0.9) : c.toDataURL('image/png');
+    }
+  };
+  await walk(json.objects);
+  return json;
+}
+
+async function cloudSave(asNew) {
+  if (!S.jerseyImg) { Cloud.error = 'Сначала выберите форму'; renderCloud(); return; }
+  Cloud.busy = true; Cloud.error = Cloud.info = ''; renderCloud();
+  try {
+    S.canvas.discardActiveObject();
+    S.canvas.getObjects().forEach(o => { const m = S.meta.get(o); o.layerName = m ? m.name : undefined; });
+    const json = await embedLocalImages(S.canvas.toJSON(HISTORY_PROPS));
+    const team = {
+      players: TB.players, xManual: TB.xManual, maxNameW: TB.maxNameW, maxNumW: TB.maxNumW,
+      values: Object.fromEntries([...TM_SAVED_SLIDERS, ...TM_SAVED_FIELDS].map(id => [id, document.getElementById(id).value])),
+    };
+    const data = { v: 1, w: S.canvas.width, h: S.canvas.height, json, kitTextColor: S.kitTextColor, team };
+    const thumb = S.canvas.toDataURL({ format: 'jpeg', quality: 0.75, multiplier: 280 / S.canvas.width });
+    const name = document.getElementById('cl-name').value.trim() || 'Без названия';
+    const q = S.cloudId && !asNew
+      ? sb.from('projects').update({ name, data, thumb }).eq('id', S.cloudId).select('id').single()
+      : sb.from('projects').insert({ name, data, thumb }).select('id').single();
+    const { data: row, error } = await q;
+    if (error) throw error;
+    S.cloudId = row.id; S.cloudName = name;
+    Cloud.info = 'Сохранено ✓';
+    await loadCloudList();
+  } catch (e) {
+    Cloud.error = 'Не удалось сохранить: ' + (e.message || e);
+  }
+  Cloud.busy = false;
+  renderCloud();
+}
+
+async function cloudOpen(id) {
+  const { data: row, error } = await sb.from('projects').select('id,name,data').eq('id', id).single();
+  if (error) { Cloud.error = error.message; renderCloud(); return; }
+  const d = row.data;
+  loadCanvasState(d, () => {
+    S.kitTextColor = d.kitTextColor || null;
+    const t = d.team || {};
+    if (t.players) { TB.players = t.players; TB.previewIdx = 0; }
+    Object.entries(t.values || {}).forEach(([k, v]) => {
+      if (TM_SAVED_SLIDERS.includes(k)) tmSetSlider(k, parseFloat(v));
+      else document.getElementById(k).value = v;
+    });
+    TB.xManual = !!t.xManual; TB.maxNameW = t.maxNameW || 0; TB.maxNumW = t.maxNumW || 0;
+    TB.autoFor = S.jerseyImg;   // keep the saved Team Builder layout, don't auto-place over it
+    S.cloudId = row.id; S.cloudName = row.name;
+    closeCloud();
+    showToast(`☁️ Открыт: ${row.name}`);
+  });
+}
+
+async function cloudDelete(id) {
+  const p = Cloud.list.find(x => x.id === id);
+  if (!confirm(`Удалить проект «${p ? p.name : ''}»? Это нельзя отменить.`)) return;
+  const { error } = await sb.from('projects').delete().eq('id', id);
+  if (error) { Cloud.error = error.message; renderCloud(); return; }
+  if (S.cloudId === id) { S.cloudId = null; S.cloudName = ''; }
+  loadCloudList();
+}
+
 /* ── KEYBOARD ────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
@@ -2420,6 +2625,7 @@ document.addEventListener('keydown', e => {
   if (e.key==='Escape' && document.getElementById('gallery-modal').classList.contains('open')) closeGallery();
   if (e.key==='Escape') closeLogoGallery();
   if (e.key==='Escape') closeTeamBuilder();
+  if (e.key==='Escape') closeCloud();
 });
 
 /* ── TOAST ───────────────────────────────────────── */
@@ -2465,6 +2671,32 @@ function attachHexField(picker) {
   hex.addEventListener('input', () => apply(false));
   hex.addEventListener('blur', () => { apply(true); show(); });
   hex.addEventListener('keydown', e => { if (e.key === 'Enter') hex.blur(); });
+
+  // Eyedropper: take a colour from anywhere on screen (or from the canvas where
+  // the browser has no EyeDropper, e.g. Safari/Firefox)
+  const drop = document.createElement('button');
+  drop.type = 'button';
+  drop.className = 'eyedrop';
+  drop.title = 'Пипетка: взять цвет с экрана';
+  drop.textContent = '💧';
+  wrap.appendChild(drop);
+  const setColor = v => { picker.value = v.toLowerCase(); picker.dispatchEvent(new Event('input', { bubbles: true })); };
+  drop.addEventListener('click', () => {
+    if (window.EyeDropper) {
+      new EyeDropper().open().then(r => setColor(r.sRGBHex)).catch(() => {});
+      return;
+    }
+    showToast('Кликните по холсту, чтобы взять цвет');
+    const el = S.canvas.upperCanvasEl;
+    const pick = e => {
+      el.removeEventListener('mousedown', pick, true);
+      e.stopPropagation(); e.preventDefault();
+      const p = S.canvas.getPointer(e), r = S.canvas.getRetinaScaling();
+      const d = S.canvas.lowerCanvasEl.getContext('2d').getImageData(Math.round(p.x * r), Math.round(p.y * r), 1, 1).data;
+      setColor(tmRgbToHex([d[0], d[1], d[2]]));
+    };
+    el.addEventListener('mousedown', pick, true);
+  });
   show();
 }
 document.querySelectorAll('input[type=color]').forEach(attachHexField);
