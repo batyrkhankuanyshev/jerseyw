@@ -448,6 +448,8 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Squad</span>
           <span id="tm-count" style="font-size:11px;color:var(--dim)">0 players</span>
         </div>
+        <button class="btn btn-panel" style="width:100%;margin-bottom:10px" onclick="tmAutoPlace()"
+          title="Find the back of the shirt and fit name/number position, size and colour">✨ Auto-place on back</button>
         <div style="display:flex;gap:8px">
           <div class="fg" style="flex:1;margin:0">
             <label>Name colour</label>
@@ -456,6 +458,41 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <div class="fg" style="flex:1;margin:0">
             <label>Number colour</label>
             <input type="color" id="tm-num-color" value="#ffffff" oninput="schedulePreview()">
+          </div>
+        </div>
+        <div class="fg" style="margin:10px 0 0">
+          <label>Horizontal position</label>
+          <div class="rr">
+            <input type="range" id="tm-x" min="0" max="100" step="0.1" value="50" oninput="tmSlider(this)">
+            <span class="rv" id="tm-x-val">50%</span>
+          </div>
+        </div>
+        <div class="fg" style="margin:6px 0 0">
+          <label>Name height</label>
+          <div class="rr">
+            <input type="range" id="tm-name-y" min="0" max="100" step="0.1" value="39" oninput="tmSlider(this)">
+            <span class="rv" id="tm-name-y-val">39%</span>
+          </div>
+        </div>
+        <div class="fg" style="margin:6px 0 0">
+          <label>Number height</label>
+          <div class="rr">
+            <input type="range" id="tm-num-y" min="0" max="100" step="0.1" value="60" oninput="tmSlider(this)">
+            <span class="rv" id="tm-num-y-val">60%</span>
+          </div>
+        </div>
+        <div class="fg" style="margin:6px 0 0">
+          <label>Name size</label>
+          <div class="rr">
+            <input type="range" id="tm-name-size" min="20" max="250" value="100" oninput="tmSlider(this)">
+            <span class="rv" id="tm-name-size-val">100%</span>
+          </div>
+        </div>
+        <div class="fg" style="margin:6px 0 0">
+          <label>Number size</label>
+          <div class="rr">
+            <input type="range" id="tm-num-size" min="20" max="250" value="100" oninput="tmSlider(this)">
+            <span class="rv" id="tm-num-size-val">100%</span>
           </div>
         </div>
       </div>
@@ -1193,28 +1230,32 @@ function applyLogoPreset(logo) {
 }
 
 /* ── TEAM BUILDER ────────────────────────────────── */
-const TB = { players: [] };
+const TB = { players: [], autoFor: null, maxNameW: 0 };
 let tmBaseURL = null;
 let previewTimer = null;
 
 function openTeamBuilder() {
   if (!S.jerseyImg) { showToast('Load a jersey first'); return; }
   document.getElementById('team-modal').style.display = 'flex';
-  tmBaseURL = getBaseDataURL();
+  tmBaseURL = getBaseDataURL(1);
   if (!TB.players.length) addDefaultSquad();
   else { renderRoster(); updatePreview(); }
+  // First open with this jersey → place name/number automatically
+  if (TB.autoFor !== S.jerseyImg) { TB.autoFor = S.jerseyImg; tmAutoPlace(true); }
 }
 
 function closeTeamBuilder() {
   document.getElementById('team-modal').style.display = 'none';
 }
 
-function getBaseDataURL() {
+// Base = current design without text layers, rendered at `scale` so 2×/3× exports stay sharp
+function getBaseDataURL(scale) {
   const texts = S.canvas.getObjects().filter(o => o.selectable && (o.type==='text'||o.type==='i-text'));
+  const wasVisible = texts.map(t => t.visible);
   texts.forEach(t => t.set('visible', false));
   S.canvas.requestRenderAll();
-  const url = S.canvas.toDataURL({ format:'png', multiplier:1 });
-  texts.forEach(t => t.set('visible', true));
+  const url = S.canvas.toDataURL({ format:'png', multiplier:scale });
+  texts.forEach((t, i) => t.set('visible', wasVisible[i]));
   S.canvas.requestRenderAll();
   return url;
 }
@@ -1245,11 +1286,11 @@ function renderRoster() {
     tr.style.borderBottom = '1px solid var(--border2)';
     tr.innerHTML = `
       <td style="padding:3px 6px">
-        <input class="fi" style="width:46px;text-align:center" value="${p.num}" placeholder="#"
+        <input class="fi" style="width:46px;text-align:center" placeholder="#"
           oninput="TB.players[${i}].num=this.value;schedulePreview()">
       </td>
       <td style="padding:3px 6px">
-        <input class="fi" value="${p.name}" placeholder="NAME" style="text-transform:uppercase"
+        <input class="fi" placeholder="NAME" style="text-transform:uppercase"
           oninput="TB.players[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();schedulePreview()">
       </td>
       <td style="padding:3px 4px">
@@ -1257,9 +1298,184 @@ function renderRoster() {
           style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1"
           onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--muted)'">✕</button>
       </td>`;
+    const [numInp, nameInp] = tr.querySelectorAll('input');
+    numInp.value  = p.num;
+    nameInp.value = p.name;
     tbody.appendChild(tr);
   });
   document.getElementById('tm-count').textContent = `${TB.players.length} players`;
+}
+
+function tmSlider(input) {
+  document.getElementById(input.id + '-val').textContent = Math.round(input.value) + '%';
+  schedulePreview();
+}
+
+function tmSetSlider(id, v) {
+  const el = document.getElementById(id);
+  el.value = Math.max(+el.min, Math.min(+el.max, v));
+  document.getElementById(id + '-val').textContent = Math.round(el.value) + '%';
+}
+
+/* ── AUTO-PLACE ──
+   Kit images show front (left) and back (right) on a plain background.
+   We mask out the background, take the right-hand piece as the back,
+   and use "shoulder line → armpit" (D) as the scale for name/number. */
+function tmDetectBack() {
+  const el = S.jerseyImg && S.jerseyImg.getElement();
+  if (!el) return null;
+  const W = S.canvas.width, H = S.canvas.height;
+  const aw = 360, k = aw / W, ah = Math.round(H * k);
+  const c = document.createElement('canvas');
+  c.width = aw; c.height = ah;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(el, 0, 0, aw, ah);
+  let d;
+  try { d = ctx.getImageData(0, 0, aw, ah).data; } catch (e) { return null; }
+
+  // Background = mean of the four corners; anything clearly different is kit
+  const at = (x, y) => (y * aw + x) * 4;
+  const cs = [at(2,2), at(aw-3,2), at(2,ah-3), at(aw-3,ah-3)];
+  const bg = [0,1,2].map(j => cs.reduce((sum, i) => sum + d[i+j], 0) / 4);
+  const mask = new Uint8Array(aw * ah);
+  for (let p = 0, i = 0; p < aw * ah; p++, i += 4) {
+    if (d[i+3] < 40) continue;
+    const diff = Math.max(Math.abs(d[i]-bg[0]), Math.abs(d[i+1]-bg[1]), Math.abs(d[i+2]-bg[2]));
+    if (diff > 24) mask[p] = 1;
+  }
+
+  // Columns: the widest empty gap in the middle band splits front | back
+  const col = new Array(aw).fill(0);
+  for (let y = 0; y < ah; y++) for (let x = 0; x < aw; x++) col[x] += mask[y*aw + x];
+  const empty = x => col[x] <= ah * 0.01;
+  let gap = null, run = -1;
+  for (let x = Math.round(aw*0.3); x <= Math.round(aw*0.7) + 1; x++) {
+    if (x <= Math.round(aw*0.7) && empty(x)) { if (run < 0) run = x; }
+    else if (run >= 0) { if (!gap || x - run > gap.len) gap = { start: run, len: x - run }; run = -1; }
+  }
+  let x0 = gap ? gap.start + gap.len : 0, x1 = aw - 1;
+  while (x0 < x1 && empty(x0)) x0++;
+  while (x1 > x0 && empty(x1)) x1--;
+  if (x1 - x0 < aw * 0.15) return null;
+
+  // Row extents of the back piece
+  const L = [], R = [], Wd = [];
+  for (let y = 0; y < ah; y++) {
+    let l = -1, r = -1;
+    for (let x = x0; x <= x1; x++) if (mask[y*aw + x]) { if (l < 0) l = x; r = x; }
+    L.push(l); R.push(r); Wd.push(l < 0 ? 0 : r - l + 1);
+  }
+  const minRow = (x1 - x0) * 0.05;
+  let top = Wd.findIndex(w => w > minRow);
+  let bottom = ah - 1;
+  while (bottom > top && Wd[bottom] <= minRow) bottom--;
+  if (top < 0 || bottom - top < ah * 0.15) return null;
+
+  // Sleeves = widest row in the upper part; armpit = where the width drops
+  const upper = top + Math.round((bottom - top) * 0.45);
+  let maxW = 0, maxY = top;
+  for (let y = top; y <= upper; y++) if (Wd[y] > maxW) { maxW = Wd[y]; maxY = y; }
+  let arm = -1;
+  for (let y = maxY; y < upper; y++) {
+    if (Wd[y] < maxW*0.85 && Wd[y+1] < maxW*0.85 && Wd[y+2] < maxW*0.85) { arm = y; break; }
+  }
+
+  const median = a => { const b = [...a].sort((p, q) => p - q); return b[b.length >> 1]; };
+  let D = arm - top, rows = [];
+  if (arm > 0) for (let y = arm; y <= arm + Math.max(2, D >> 1) && y <= bottom; y++) if (Wd[y]) rows.push(y);
+  let tw = rows.length ? median(rows.map(y => Wd[y])) : maxW;
+  // No visible sleeves (e.g. white sleeves on white) or odd ratio → typical shirt proportions
+  if (arm < 0 || D / tw < 0.3 || D / tw > 1.0) {
+    tw = maxW; D = tw * 0.59;
+    rows = [];
+    for (let y = Math.round(top + D); y <= Math.round(top + 1.5*D) && y <= bottom; y++) if (Wd[y]) rows.push(y);
+  }
+  const cx = rows.length ? median(rows.map(y => (L[y] + R[y]) / 2)) : (x0 + x1) / 2;
+  return { cx: cx / k, top: top / k, D: D / k, torsoW: tw / k };
+}
+
+// WCAG contrast between two [r,g,b]
+function tmContrast(a, b) {
+  const lum = c => {
+    const v = c.map(x => { x /= 255; return x <= 0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055, 2.4); });
+    return 0.2126*v[0] + 0.7152*v[1] + 0.0722*v[2];
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+const tmHexToRgb = h => [1,3,5].map(i => parseInt(h.slice(i, i+2), 16));
+const tmRgbToHex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
+
+// Brand colours already in the design: text fills + the main colour of each logo
+function tmDesignColors() {
+  const out = [];
+  S.canvas.getObjects().filter(o => o.selectable !== false).forEach(o => {
+    if ((o.type === 'text' || o.type === 'i-text') && /^#[0-9a-f]{6}$/i.test(o.fill || '')) {
+      out.push(tmHexToRgb(o.fill));
+    } else if (o.type === 'image') {
+      const c = document.createElement('canvas'); c.width = c.height = 48;
+      const x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(o.getElement(), 0, 0, 48, 48);
+      let d; try { d = x.getImageData(0, 0, 48, 48).data; } catch (e) { return; }
+      // Bucket saturated pixels by hue, average the biggest bucket
+      const bins = {};
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i+3] < 128) continue;
+        const mx = Math.max(d[i],d[i+1],d[i+2]), mn = Math.min(d[i],d[i+1],d[i+2]);
+        if (mx - mn < 50 || mx < 40) continue;
+        let h;
+        if (mx === d[i])        h = ((d[i+1]-d[i+2]) / (mx-mn) + 6) % 6;
+        else if (mx === d[i+1]) h = (d[i+2]-d[i]) / (mx-mn) + 2;
+        else                    h = (d[i]-d[i+1]) / (mx-mn) + 4;
+        const b = Math.floor(h * 2);
+        (bins[b] = bins[b] || []).push([d[i], d[i+1], d[i+2]]);
+      }
+      const best = Object.values(bins).sort((p, q) => q.length - p.length)[0];
+      if (best && best.length > 20) out.push([0,1,2].map(j => best.reduce((sum, p) => sum + p[j], 0) / best.length));
+    }
+  });
+  return out;
+}
+
+async function tmAutoPlace(silent) {
+  const box = tmDetectBack();
+  if (!box) { if (!silent) showToast('Could not find the back of the shirt — set position manually'); return; }
+  const W = S.canvas.width, H = S.canvas.height;
+  const { cx, top, D, torsoW } = box;
+
+  // Proportions measured on a real printed kit: name caps ≈ 0.12·D tall at 0.45·D,
+  // number ≈ 0.64·D tall centred at 0.98·D (Inter caps/digits ≈ 0.73 em)
+  tmSetSlider('tm-x',        cx / W * 100);
+  tmSetSlider('tm-name-y',   (top + 0.45*D) / H * 100);
+  tmSetSlider('tm-num-y',    (top + 0.98*D) / H * 100);
+  tmSetSlider('tm-name-size', (0.165*D) / (W*0.062) * 100);
+  tmSetSlider('tm-num-size',  (0.88*D)  / (W*0.21)  * 100);
+  TB.maxNameW = torsoW * 0.8;
+
+  // Colour: average shirt colour behind the number, then the most contrasting brand colour
+  const img = new Image();
+  img.src = tmBaseURL;
+  await img.decode();
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.drawImage(img, 0, 0, W, H);
+  const rx = Math.max(0, Math.round(cx - torsoW*0.3)), ry = Math.round(top + 0.2*D);
+  const rw = Math.max(1, Math.round(torsoW*0.6)),     rh = Math.max(1, Math.round(1.3*D));
+  const d = x.getImageData(rx, ry, Math.min(rw, W - rx), Math.min(rh, H - ry)).data;
+  const shirt = [0, 0, 0]; let n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i+3] > 128) { shirt[0] += d[i]; shirt[1] += d[i+1]; shirt[2] += d[i+2]; n++; }
+  if (n) shirt.forEach((v, j) => shirt[j] = v / n);
+
+  let pick = null, best = 0;
+  tmDesignColors().forEach(col => { const k = tmContrast(col, shirt); if (k > best) { best = k; pick = col; } });
+  if (!pick || best < 2.5) pick = tmContrast([255,255,255], shirt) >= tmContrast([0,0,0], shirt) ? [255,255,255] : [17,17,17];
+  const hex = tmRgbToHex(pick);
+  document.getElementById('tm-name-color').value = hex;
+  document.getElementById('tm-num-color').value  = hex;
+
+  updatePreview();
+  if (!silent) showToast('✨ Name & number placed on the back');
 }
 
 function schedulePreview() {
@@ -1281,6 +1497,8 @@ function renderPlayerCanvas(player, baseURL, scale) {
     const H = S.canvas.height;
     const nameColor = document.getElementById('tm-name-color').value;
     const numColor  = document.getElementById('tm-num-color').value;
+    const pct  = id => parseInt(document.getElementById(id).value) / 100;
+    const x    = W * pct('tm-x');
     const tmp = new fabric.StaticCanvas(null, { width:W, height:H });
 
     fabric.Image.fromURL(baseURL, img => {
@@ -1288,20 +1506,23 @@ function renderPlayerCanvas(player, baseURL, scale) {
       tmp.add(img);
 
       if (player.name) {
-        tmp.add(new fabric.Text(player.name.toUpperCase(), {
-          left: W/2, top: H*0.39,
+        const name = new fabric.Text(player.name.toUpperCase(), {
+          left: x, top: H * pct('tm-name-y'),
           originX:'center', originY:'center',
-          fontSize: Math.round(W*0.062),
+          fontSize: Math.round(W*0.062*pct('tm-name-size')),
           fontFamily:'Inter', fontWeight:'bold',
           fill: nameColor, charSpacing: 160,
-        }));
+        });
+        // Long surnames shrink to stay inside the shirt
+        if (TB.maxNameW && name.width > TB.maxNameW) name.scale(TB.maxNameW / name.width);
+        tmp.add(name);
       }
 
       if (player.num) {
         tmp.add(new fabric.Text(String(player.num), {
-          left: W/2, top: H*0.60,
+          left: x, top: H * pct('tm-num-y'),
           originX:'center', originY:'center',
-          fontSize: Math.round(W*0.21),
+          fontSize: Math.round(W*0.21*pct('tm-num-size')),
           fontFamily:'Inter', fontWeight:'bold',
           fill: numColor,
         }));
@@ -1323,16 +1544,23 @@ async function generateTeamZip() {
   const prog = document.getElementById('tm-progress');
   btn.disabled = true;
   prog.style.display = '';
-  tmBaseURL = getBaseDataURL();
+  const scale = parseInt(document.getElementById('export-quality').value) || 2;
+  const baseURL = getBaseDataURL(scale);
 
   const zip = new JSZip();
+  const used = new Set();
   for (let i=0; i<valid.length; i++) {
     const p = valid[i];
     prog.textContent = `Generating ${i+1} / ${valid.length}…`;
     await new Promise(r => setTimeout(r, 0));
-    const dataURL = await renderPlayerCanvas(p, tmBaseURL, 2);
+    const dataURL = await renderPlayerCanvas(p, baseURL, scale);
     const b64  = dataURL.split(',')[1];
-    const name = `${String(p.num||i+1).padStart(2,'0')}_${(p.name||'PLAYER').replace(/\s+/g,'_')}.png`;
+    // Strip characters that would create folders or are invalid on Windows/macOS
+    const safe = s => String(s).replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g,'_');
+    const stem = `${(safe(p.num) || String(i+1)).padStart(2,'0')}_${safe(p.name) || 'PLAYER'}`;
+    let name = `${stem}.png`;
+    for (let n=2; used.has(name); n++) name = `${stem}_${n}.png`;
+    used.add(name);
     zip.file(name, b64, { base64:true });
   }
 
@@ -1361,6 +1589,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keydown', e => {
   if (e.key==='Escape' && document.getElementById('gallery-modal').classList.contains('open')) closeGallery();
   if (e.key==='Escape') closeLogoGallery();
+  if (e.key==='Escape') closeTeamBuilder();
 });
 
 /* ── TOAST ───────────────────────────────────────── */
