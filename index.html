@@ -442,6 +442,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
         <button class="btn btn-ghost" onclick="layerUp()">↑ Вверх</button>
         <button class="btn btn-ghost" onclick="layerDown()">↓ Вниз</button>
       </div>
+      <button class="btn btn-panel" onclick="duplicateSelected()" title="⌘D">⧉ Дублировать</button>
       <button class="btn btn-panel btn-danger" onclick="deleteSelected()">✕ Удалить слой</button>
     </div>
 
@@ -672,6 +673,7 @@ const S = {
   galleryData: [],            // loaded from manifest
   allCats:     [],
   activeCat:   'все',
+  kitTextColor: null,         // print colour of the current gallery kit, if known
 };
 let lc = 0; // layer counter
 
@@ -857,6 +859,8 @@ function renderGalleryGrid(items) {
 
 function applyGalleryJersey(jersey) {
   closeGallery();
+  // The club's name/number print colour, used as the default for new text
+  S.kitTextColor = jersey.textColor ? jersey.textColor.toLowerCase() : null;
   const url = `jerseys/${jersey.file}`;
   fabric.Image.fromURL(url, img => {
     if (!img) { showToast('Не удалось загрузить изображение'); return; }
@@ -871,6 +875,7 @@ function applyGalleryJersey(jersey) {
 /* ── JERSEY BACKGROUND ───────────────────────────── */
 function loadJersey(e) {
   const file = e.target.files[0]; if (!file) return;
+  S.kitTextColor = null;
   const url = URL.createObjectURL(file);
   fabric.Image.fromURL(url, img => {
     const maxW=720, maxH=860;
@@ -961,7 +966,7 @@ function addText(isNum=false) {
     fontSize:   isNum ? 100 : 40,
     fontFamily: 'Inter',
     fontWeight: isNum ? 'bold' : 'normal',
-    fill:       '#ffffff',
+    fill:       S.kitTextColor || '#ffffff',
     charSpacing: 0,
     opacity:    1,
     angle:      0,
@@ -1249,13 +1254,14 @@ function updateLayers() {
     const icon = m.type==='text' ? '📝' : m.type==='image' ? '🖼' : '◻';
     const li = document.createElement('li');
     li.className = 'li' + (obj===active ? ' active' : '');
-    li.innerHTML=`<span class="li-icon">${icon}</span><span class="li-name">${m.name}</span><span class="li-acts"><button title="Вверх" data-act="up">↑</button><button title="Вниз" data-act="dn">↓</button><button title="Удалить" class="del" data-act="del">✕</button></span>`;
+    li.innerHTML=`<span class="li-icon">${icon}</span><span class="li-name">${m.name}</span><span class="li-acts"><button title="Вверх" data-act="up">↑</button><button title="Вниз" data-act="dn">↓</button><button title="Дублировать" data-act="dup">⧉</button><button title="Удалить" class="del" data-act="del">✕</button></span>`;
 
     li.addEventListener('click', ev => {
       const act = ev.target.dataset.act;
       if (act==='up')  { S.canvas.bringForward(obj); S.canvas.requestRenderAll(); updateLayers(); return; }
       if (act==='dn')  { S.canvas.sendBackwards(obj); S.canvas.requestRenderAll(); updateLayers(); return; }
       if (act==='del') { S.canvas.remove(obj); S.meta.delete(obj); clearProps(); updateLayers(); return; }
+      if (act==='dup') { duplicateSelected(obj); return; }
       S.canvas.setActiveObject(obj); S.canvas.requestRenderAll(); syncProps(); updateLayers();
     });
     list.appendChild(li);
@@ -1265,6 +1271,21 @@ function updateLayers() {
 function deleteSelected() {
   const obj = S.canvas.getActiveObject(); if (!obj) return;
   S.canvas.remove(obj); S.meta.delete(obj); clearProps(); updateLayers();
+}
+// Copy of a layer (text, logo, badge with its circle), placed slightly offset
+function duplicateSelected(src) {
+  const obj = src || S.canvas.getActiveObject();
+  if (!obj || obj.type === 'activeSelection') return;
+  const m = S.meta.get(obj) || { type: 'image', name: 'Слой' };
+  obj.clone(copy => {
+    copy.set({ left: obj.left + 20, top: obj.top + 20 });
+    S.meta.set(copy, { id: ++lc, type: m.type, name: `${m.name} (копия)` });
+    S.canvas.add(copy);
+    S.canvas.setActiveObject(copy);
+    S.canvas.requestRenderAll();
+    syncProps();
+    updateLayers();
+  }, ['tmKeep']);
 }
 function layerUp()   { const o=S.canvas.getActiveObject(); if(o){S.canvas.bringForward(o);S.canvas.requestRenderAll();updateLayers();} }
 function layerDown() { const o=S.canvas.getActiveObject(); if(o){S.canvas.sendBackwards(o);S.canvas.requestRenderAll();updateLayers();} }
@@ -1392,7 +1413,7 @@ function addKitTexts() {
       fontSize: Math.round(t.cap * kit.D / 0.72), lineHeight: 1.05,
       fontFamily: pickFont(t.font || document.getElementById('tm-num-font').value || TM_DEFAULT_FONT),
       fontWeight: 'bold', charSpacing: t.spacing,
-      fill: tmLogoColor(shirtC, shortsC),
+      fill: S.kitTextColor || tmLogoColor(shirtC, shortsC),
     });
     obj.tmKeep = true;   // keep it in Team Builder exports
     const maxW = kit.torsoW * 0.8;
@@ -1845,7 +1866,8 @@ async function tmAutoPlace(silent) {
   let pick = null, best = 0;
   tmDesignColors().forEach(col => { const k = tmContrast(col, shirt); if (k > best) { best = k; pick = col; } });
   if (!pick || best < 2.5) pick = tmContrast([255,255,255], shirt) >= tmContrast([0,0,0], shirt) ? [255,255,255] : [17,17,17];
-  const hex = tmRgbToHex(pick);
+  // A gallery kit with a known club print colour wins over the guess
+  const hex = S.kitTextColor || tmRgbToHex(pick);
   document.getElementById('tm-name-color').value = hex;
   document.getElementById('tm-num-color').value  = hex;
 
@@ -2151,6 +2173,7 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
   if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='d') { e.preventDefault(); duplicateSelected(); }
   if (e.key==='Escape') { S.canvas.discardActiveObject(); S.canvas.requestRenderAll(); }
   if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveProject(); }
   if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') { e.preventDefault(); e.shiftKey ? History.redo() : History.undo(); }
