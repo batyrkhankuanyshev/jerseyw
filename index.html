@@ -83,6 +83,19 @@ input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
 .hexpick{display:flex;gap:4px}
+.fpick-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:5px 9px;cursor:pointer;font-size:14px;text-align:left;min-height:31px}
+.fpick-btn:hover{border-color:rgba(200,241,53,.4)}
+.fpick-btn span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fpick-btn::after{content:'▾';font-family:Inter,sans-serif;font-size:10px;color:var(--muted)}
+#fpick-pop{position:fixed;z-index:500;width:300px;max-height:420px;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+#fpick-pop input{margin:8px;width:auto}
+#fpick-list{overflow-y:auto;padding:0 4px 6px}
+.fpick-sec{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:8px 8px 4px}
+.fpick-item{display:block;width:100%;background:none;border:none;color:var(--text);text-align:left;padding:6px 8px;border-radius:4px;cursor:pointer}
+.fpick-item:hover,.fpick-item.kb{background:var(--panel2)}
+.fpick-item.on{outline:1px solid var(--accent)}
+.fpick-item .s{display:block;font-size:20px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fpick-item .n{display:block;font-family:Inter,sans-serif;font-size:10px;color:var(--muted)}
 .hexpick input[type=color]{width:30px;flex:none}
 .hexpick .fi{flex:1;min-width:0;font-family:monospace;text-transform:uppercase}
 input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;margin:4px 0}
@@ -448,6 +461,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Squad</span>
           <span id="tm-count" style="font-size:11px;color:var(--dim)">0 players</span>
         </div>
+        <div id="tm-sizes" style="font-size:11px;color:var(--dim);margin:-4px 0 10px;display:none"></div>
         <button class="btn btn-panel" style="width:100%;margin-bottom:10px" onclick="tmAutoPlace()"
           title="Find the back of the shirt and fit name/number position, size and colour">✨ Auto-place on back</button>
         <div style="display:flex;gap:8px">
@@ -458,6 +472,21 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <div class="fg" style="flex:1;margin:0">
             <label>Number colour</label>
             <input type="color" id="tm-num-color" value="#ffffff" oninput="schedulePreview()">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <div class="fg" style="flex:1;margin:0;min-width:0">
+            <label>Name font</label>
+            <select class="fs" id="tm-name-font" onchange="tmFontChanged(this)">
+              <option value="">Same as number</option>
+              <option value="Inter">Inter</option>
+            </select>
+          </div>
+          <div class="fg" style="flex:1;margin:0;min-width:0">
+            <label>Number font</label>
+            <select class="fs" id="tm-num-font" onchange="tmFontChanged(this)">
+              <option value="Inter">Inter</option>
+            </select>
           </div>
         </div>
         <div class="fg" style="margin:10px 0 0">
@@ -495,6 +524,13 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
             <span class="rv" id="tm-num-size-val">100%</span>
           </div>
         </div>
+        <div class="fg" style="margin:6px 0 0">
+          <label>Number spacing</label>
+          <div class="rr">
+            <input type="range" id="tm-num-spacing" min="0" max="400" value="80" data-unit="" oninput="tmSlider(this)">
+            <span class="rv" id="tm-num-spacing-val">80</span>
+          </div>
+        </div>
       </div>
       <div style="flex:1;overflow-y:auto;padding:8px 14px">
         <table style="width:100%;border-collapse:collapse">
@@ -502,6 +538,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
             <tr style="border-bottom:1px solid var(--border2)">
               <th style="text-align:left;font-size:10px;color:var(--muted);font-weight:700;padding:4px 6px 8px;text-transform:uppercase;letter-spacing:.4px;width:56px">#</th>
               <th style="text-align:left;font-size:10px;color:var(--muted);font-weight:700;padding:4px 6px 8px;text-transform:uppercase;letter-spacing:.4px">Name</th>
+              <th style="text-align:left;font-size:10px;color:var(--muted);font-weight:700;padding:4px 6px 8px;text-transform:uppercase;letter-spacing:.4px;width:56px">Size</th>
               <th style="width:24px"></th>
             </tr>
           </thead>
@@ -511,11 +548,25 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           <button class="btn btn-panel" style="flex:1" onclick="addPlayer()">＋ Add player</button>
           <button class="btn btn-panel" style="flex:1" onclick="addDefaultSquad()">⚡ 11 default</button>
         </div>
+        <button class="btn btn-panel" style="width:100%;margin-top:6px" onclick="toggleImport(true)">📋 Paste list</button>
+        <div id="tm-import" style="display:none;margin-top:8px">
+          <textarea id="tm-import-text" class="fi" rows="8" spellcheck="false" style="resize:vertical;font-family:monospace;text-transform:uppercase"
+            placeholder="One player per line: NAME NUMBER SIZE&#10;MALIK 17 XS&#10;BEKAIDAR 29 S"></textarea>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn btn-primary" style="flex:1" onclick="importRoster(false)">Replace list</button>
+            <button class="btn btn-panel" style="flex:1" onclick="importRoster(true)">Add to list</button>
+            <button class="btn btn-ghost" onclick="toggleImport(false)">✕</button>
+          </div>
+        </div>
       </div>
     </div>
     <!-- RIGHT: preview + generate -->
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Preview (first player)</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-panel" style="padding:4px 10px" onclick="stepPreview(-1)" title="Previous player">‹</button>
+        <span id="tm-preview-label" style="font-size:11px;color:var(--dim);min-width:180px;text-align:center;text-transform:uppercase;letter-spacing:.4px">Preview</span>
+        <button class="btn btn-panel" style="padding:4px 10px" onclick="stepPreview(1)" title="Next player">›</button>
+      </div>
       <img id="tm-preview-img" style="max-height:380px;max-width:100%;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.6);object-fit:contain" src="">
       <div id="tm-progress" style="display:none;font-size:12px;color:var(--dim);text-align:center;min-height:18px"></div>
       <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
@@ -619,7 +670,7 @@ initCanvas();
 /* ── GALLERY ─────────────────────────────────────── */
 async function loadGalleryManifest() {
   try {
-    const r = await fetch('jerseys/manifest.json');
+    const r = await fetch('jerseys/manifest.json', { cache: 'no-cache' });
     if (!r.ok) return;
     const d = await r.json();
     S.galleryData = d.jerseys || [];
@@ -889,24 +940,27 @@ function loadFontFile(e) {
 /* ── FONTS: preload from manifest ────────────────── */
 async function preloadFonts() {
   try {
-    const r = await fetch('fonts/manifest.json');
+    const r = await fetch('fonts/manifest.json', { cache: 'no-cache' });
     if (!r.ok) return;
     const d = await r.json();
-    for (const f of (d.fonts||[])) {
-      try {
-        const face = new FontFace(f.family, `url(fonts/${f.file})`);
-        const loaded = await face.load();
-        document.fonts.add(loaded);
-        addFontToDropdowns(f.family, f.name || f.family);
-        addFontChip(f.family, false);
-      } catch(e) { console.warn('Font load failed:', f.file); }
-    }
+    // Download in parallel (60+ fonts), then add to the menus in manifest order
+    const fonts = d.fonts || [];
+    const faces = await Promise.all(fonts.map(f =>
+      new FontFace(f.family, `url("fonts/${encodeURIComponent(f.file)}")`).load()
+        .catch(() => { console.warn('Font load failed:', f.file); return null; })));
+    fonts.forEach((f, i) => {
+      if (!faces[i]) return;
+      document.fonts.add(faces[i]);
+      addFontToDropdowns(f.family, f.name || f.family);
+      addFontChip(f.family, false);
+    });
+    tmInitFonts();
   } catch(e) { /* нет манифеста — норм */ }
 }
 preloadFonts();
 
 function addFontToDropdowns(family, label) {
-  ['prop-font'].forEach(id => {
+  ['prop-font', 'tm-name-font', 'tm-num-font'].forEach(id => {
     const sel = document.getElementById(id);
     if ([...sel.options].some(o => o.value===family)) return;
     const opt = document.createElement('option');
@@ -925,7 +979,7 @@ function addFontChip(family, removable) {
 }
 
 function removeFont(fam) {
-  document.querySelectorAll(`#prop-font option[value="${fam}"]`).forEach(o=>o.remove());
+  document.querySelectorAll(`#prop-font option[value="${fam}"], #tm-name-font option[value="${fam}"], #tm-num-font option[value="${fam}"]`).forEach(o=>o.remove());
   document.querySelectorAll(`[data-fam="${fam}"]`).forEach(el=>el.remove());
 }
 
@@ -1174,11 +1228,70 @@ function loadProject() {
 }
 
 /* ── LOGO GALLERY ────────────────────────────────── */
+// Spots measured on a real kit, in units of the front shirt's geometry:
+// chest at 0.58·D below the shoulders, shorts 0.27·D above the hem
+const LOGO_AREA_NAMES = { chest: 'грудь', shorts: 'шорты' };
+
+// Median colour of the jersey image in a square around (x, y), canvas units
+function tmSampleKit(x, y, r) {
+  const el = S.jerseyImg.getElement();
+  const W = S.canvas.width, H = S.canvas.height;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(el, 0, 0, W, H);
+  const x0 = Math.max(0, Math.round(x - r)), y0 = Math.max(0, Math.round(y - r));
+  const s = Math.max(1, Math.round(2 * r));
+  const d = ctx.getImageData(x0, y0, Math.min(s, W - x0), Math.min(s, H - y0)).data;
+  const ch = [[], [], []];
+  for (let i = 0; i < d.length; i += 4) { ch[0].push(d[i]); ch[1].push(d[i+1]); ch[2].push(d[i+2]); }
+  return ch.map(a => a.sort((p, q) => p - q)[a.length >> 1]);
+}
+
+// Use the kit's other colour (red logo on white shorts, white logo on red shirt);
+// if that doesn't stand out, white or near-black
+function tmLogoColor(area, other) {
+  if (tmContrast(other, area) >= 2.5) return tmRgbToHex(other);
+  return tmContrast([255,255,255], area) >= tmContrast([17,17,17], area) ? '#ffffff' : '#111111';
+}
+
+function placeLogoOnKit(logo, kit) {
+  const { cx, top, D, torsoW, hem, shortsAt } = kit;
+  const shortsY = hem - 0.27 * D;
+  const legs = shortsAt(shortsY);
+  const shirtC  = tmSampleKit(cx, top + 0.9 * D, 0.12 * D);
+  const shortsC = tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), shortsY, 0.1 * D);
+  logo.placements.forEach(pl => {
+    fabric.Image.fromURL(`logos/${logo.file}`, img => {
+      if (!img) { showToast('Не удалось загрузить логотип'); return; }
+      let x, y, color;
+      if (pl.area === 'shorts') {
+        y = shortsY;
+        x = legs.l + pl.x * (legs.r - legs.l);
+        color = tmLogoColor(shortsC, shirtC);
+      } else {
+        y = top + 0.58 * D;
+        x = cx + pl.x * torsoW;
+        color = tmLogoColor(shirtC, shortsC);
+      }
+      img.scaleToHeight(pl.size * D);
+      img.set({ left: x, top: y, originX:'center', originY:'center' });
+      img.filters = [new fabric.Image.filters.ColorOverlay({ color, intensity: 1 })];
+      img.applyFilters();
+      const id = ++lc;
+      S.meta.set(img, { id, type:'image', name: `Лого: ${logo.name} (${LOGO_AREA_NAMES[pl.area] || pl.area})` });
+      S.canvas.add(img);
+      S.canvas.requestRenderAll();
+      updateLayers();
+    }, { crossOrigin: 'anonymous' });
+  });
+  showToast(`${logo.name}: размещено на груди и шортах`);
+}
+
 const logoData = { logos: [] };
 
 async function loadLogoManifest() {
   try {
-    const r = await fetch('logos/manifest.json');
+    const r = await fetch('logos/manifest.json', { cache: 'no-cache' });
     if (!r.ok) return;
     const d = await r.json();
     logoData.logos = d.logos || [];
@@ -1214,6 +1327,9 @@ function renderLogoGrid(items) {
 }
 function applyLogoPreset(logo) {
   closeLogoGallery();
+  // Presets with "placements" go straight to their spots on the front kit
+  const kit = logo.placements && S.jerseyImg ? tmDetectKit('front') : null;
+  if (kit) { placeLogoOnKit(logo, kit); return; }
   fabric.Image.fromURL(`logos/${logo.file}`, img => {
     if (!img) { showToast('Не удалось загрузить логотип'); return; }
     const maxD = Math.min(S.canvas.width, S.canvas.height) * 0.20;
@@ -1230,13 +1346,16 @@ function applyLogoPreset(logo) {
 }
 
 /* ── TEAM BUILDER ────────────────────────────────── */
-const TB = { players: [], autoFor: null, maxNameW: 0 };
+const TB = { players: [], autoFor: null, maxNameW: 0, maxNumW: 0, previewIdx: 0 };
+const TM_DEFAULT_FONT = 'Arsenal2425';
+const TM_SIZE_ORDER = ['XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];
 let tmBaseURL = null;
 let previewTimer = null;
 
 function openTeamBuilder() {
   if (!S.jerseyImg) { showToast('Load a jersey first'); return; }
   document.getElementById('team-modal').style.display = 'flex';
+  tmInitFonts();
   tmBaseURL = getBaseDataURL(1);
   if (!TB.players.length) addDefaultSquad();
   else { renderRoster(); updatePreview(); }
@@ -1260,20 +1379,21 @@ function getBaseDataURL(scale) {
   return url;
 }
 
-function addPlayer(num='', name='') {
-  TB.players.push({ num, name });
+function addPlayer(num='', name='', size='') {
+  TB.players.push({ num, name, size });
   renderRoster();
   schedulePreview();
 }
 
 function removePlayer(i) {
   TB.players.splice(i, 1);
+  if (TB.previewIdx > i || TB.previewIdx >= TB.players.length) TB.previewIdx = Math.max(0, TB.previewIdx - 1);
   renderRoster();
   schedulePreview();
 }
 
 function addDefaultSquad() {
-  TB.players = Array.from({length:11}, (_,i) => ({ num:String(i+1), name:'' }));
+  TB.players = Array.from({length:11}, (_,i) => ({ num:String(i+1), name:'', size:'' }));
   renderRoster();
   schedulePreview();
 }
@@ -1293,35 +1413,64 @@ function renderRoster() {
         <input class="fi" placeholder="NAME" style="text-transform:uppercase"
           oninput="TB.players[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase();schedulePreview()">
       </td>
+      <td style="padding:3px 6px">
+        <input class="fi" style="width:46px;text-align:center;text-transform:uppercase" placeholder="—"
+          oninput="TB.players[${i}].size=this.value.toUpperCase().trim();this.value=this.value.toUpperCase();renderSizeSummary()">
+      </td>
       <td style="padding:3px 4px">
         <button onclick="removePlayer(${i})"
           style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1"
           onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--muted)'">✕</button>
       </td>`;
-    const [numInp, nameInp] = tr.querySelectorAll('input');
+    const [numInp, nameInp, sizeInp] = tr.querySelectorAll('input');
     numInp.value  = p.num;
     nameInp.value = p.name;
+    sizeInp.value = p.size || '';
+    // Editing a row previews that player
+    tr.addEventListener('focusin', () => {
+      if (TB.previewIdx === i) return;
+      TB.previewIdx = i;
+      [...tbody.children].forEach((row, j) => row.style.background = j === i ? 'var(--panel2)' : '');
+      updatePreview();
+    });
+    if (i === TB.previewIdx) tr.style.background = 'var(--panel2)';
     tbody.appendChild(tr);
   });
   document.getElementById('tm-count').textContent = `${TB.players.length} players`;
+  renderSizeSummary();
+}
+
+// Fonts: last choice (per browser) or a jersey font; Inter only if that isn't loaded yet
+function tmInitFonts() {
+  [['tm-num-font', TM_DEFAULT_FONT], ['tm-name-font', '']].forEach(([id, def]) => {
+    const sel = document.getElementById(id);
+    let want = def;
+    try { want = localStorage.getItem(id) ?? def; } catch (e) {}
+    if ([...sel.options].some(o => o.value === want)) sel.value = want;
+  });
+}
+
+function tmFontChanged(sel) {
+  try { localStorage.setItem(sel.id, sel.value); } catch (e) {}
+  schedulePreview();
 }
 
 function tmSlider(input) {
-  document.getElementById(input.id + '-val').textContent = Math.round(input.value) + '%';
+  document.getElementById(input.id + '-val').textContent = Math.round(input.value) + (input.dataset.unit ?? '%');
   schedulePreview();
 }
 
 function tmSetSlider(id, v) {
   const el = document.getElementById(id);
   el.value = Math.max(+el.min, Math.min(+el.max, v));
-  document.getElementById(id + '-val').textContent = Math.round(el.value) + '%';
+  document.getElementById(id + '-val').textContent = Math.round(el.value) + (el.dataset.unit ?? '%');
 }
 
 /* ── AUTO-PLACE ──
    Kit images show front (left) and back (right) on a plain background.
-   We mask out the background, take the right-hand piece as the back,
-   and use "shoulder line → armpit" (D) as the scale for name/number. */
-function tmDetectBack() {
+   We mask out the background, split the pieces at the empty gap, and use
+   "shoulder line → armpit" (D) as the scale for name/number and logos. */
+function tmDetectKit(side = 'back') {
   const el = S.jerseyImg && S.jerseyImg.getElement();
   if (!el) return null;
   const W = S.canvas.width, H = S.canvas.height;
@@ -1353,12 +1502,15 @@ function tmDetectBack() {
     if (x <= Math.round(aw*0.7) && empty(x)) { if (run < 0) run = x; }
     else if (run >= 0) { if (!gap || x - run > gap.len) gap = { start: run, len: x - run }; run = -1; }
   }
-  let x0 = gap ? gap.start + gap.len : 0, x1 = aw - 1;
+  // No gap → single piece, used for both sides
+  let x0 = 0, x1 = aw - 1;
+  if (gap && side === 'back')  x0 = gap.start + gap.len;
+  if (gap && side === 'front') x1 = gap.start - 1;
   while (x0 < x1 && empty(x0)) x0++;
   while (x1 > x0 && empty(x1)) x1--;
   if (x1 - x0 < aw * 0.15) return null;
 
-  // Row extents of the back piece
+  // Row extents of the piece
   const L = [], R = [], Wd = [];
   for (let y = 0; y < ah; y++) {
     let l = -1, r = -1;
@@ -1391,7 +1543,32 @@ function tmDetectBack() {
     for (let y = Math.round(top + D); y <= Math.round(top + 1.5*D) && y <= bottom; y++) if (Wd[y]) rows.push(y);
   }
   const cx = rows.length ? median(rows.map(y => (L[y] + R[y]) / 2)) : (x0 + x1) / 2;
-  return { cx: cx / k, top: top / k, D: D / k, torsoW: tw / k };
+
+  // Shirt colour = mean of kit pixels across the torso rows
+  const shirt = [0, 0, 0]; let n = 0;
+  rows.forEach(y => { for (let x = L[y]; x <= R[y]; x++) if (mask[y*aw + x]) {
+    const i = at(x, y); shirt[0] += d[i]; shirt[1] += d[i+1]; shirt[2] += d[i+2]; n++;
+  } });
+  if (n) shirt.forEach((v, j) => shirt[j] = v / n);
+
+  // Shorts hem = last row before the empty band that separates shorts from socks
+  let hem = -1;
+  for (let y = Math.round(top + 2*D); y < bottom - 2; y++) {
+    if (Wd[y] && Wd[y+1] <= minRow && Wd[y+2] <= minRow && Wd[y+3] <= minRow) { hem = y; break; }
+  }
+  if (hem < 0) hem = bottom;
+  // White shorts on white background etc. → typical proportion (3.4·D below the shoulders)
+  if ((hem - top) / D < 2.8 || (hem - top) / D > 4.2) hem = top + 3.4 * D;
+
+  // Shorts width at a given canvas y (falls back to torso-based estimate)
+  const shortsAt = yc => {
+    const y = Math.round(yc * k);
+    const ok = Wd[y] && Wd[y] / tw > 1.1 && Wd[y] / tw < 1.7;
+    const l = ok ? L[y] : cx - tw * 0.685, r = ok ? R[y] : cx + tw * 0.685;
+    return { l: l / k, r: r / k };
+  };
+
+  return { cx: cx / k, top: top / k, D: D / k, torsoW: tw / k, hem: hem / k, shirt, shortsAt };
 }
 
 // WCAG contrast between two [r,g,b]
@@ -1439,7 +1616,7 @@ function tmDesignColors() {
 }
 
 async function tmAutoPlace(silent) {
-  const box = tmDetectBack();
+  const box = tmDetectKit('back');
   if (!box) { if (!silent) showToast('Could not find the back of the shirt — set position manually'); return; }
   const W = S.canvas.width, H = S.canvas.height;
   const { cx, top, D, torsoW } = box;
@@ -1452,6 +1629,7 @@ async function tmAutoPlace(silent) {
   tmSetSlider('tm-name-size', (0.165*D) / (W*0.062) * 100);
   tmSetSlider('tm-num-size',  (0.88*D)  / (W*0.21)  * 100);
   TB.maxNameW = torsoW * 0.8;
+  TB.maxNumW  = torsoW * 0.72;
 
   // Colour: average shirt colour behind the number, then the most contrasting brand colour
   const img = new Image();
@@ -1478,6 +1656,57 @@ async function tmAutoPlace(silent) {
   if (!silent) showToast('✨ Name & number placed on the back');
 }
 
+const tmSizeRank = sz => { const r = TM_SIZE_ORDER.indexOf(sz); return r < 0 ? 99 : r; };
+
+function renderSizeSummary() {
+  const counts = {};
+  TB.players.forEach(p => { if (p.size) counts[p.size] = (counts[p.size] || 0) + 1; });
+  const keys = Object.keys(counts).sort((a, b) => tmSizeRank(a) - tmSizeRank(b) || a.localeCompare(b));
+  const el = document.getElementById('tm-sizes');
+  el.style.display = keys.length ? '' : 'none';
+  el.textContent = keys.map(k => `${k} ${counts[k]}`).join(' · ');
+}
+
+function toggleImport(show) {
+  document.getElementById('tm-import').style.display = show ? '' : 'none';
+  if (show) document.getElementById('tm-import-text').focus();
+}
+
+// Each line: name, number and size in any order, e.g. "MALIK 17 XS" or "17, Malik, XS"
+function parseRosterText(text) {
+  const sizeRe = /^(XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL)$/i;
+  return text.split(/\r?\n/).map(line => {
+    let num = '', size = '';
+    const rest = [];
+    line.trim().split(/[\s,;]+/).filter(Boolean).forEach(t => {
+      if (!num && /^\d{1,3}$/.test(t)) num = t;          // keeps "06" as written
+      else if (!size && sizeRe.test(t)) size = t.toUpperCase();
+      else rest.push(t);
+    });
+    return { num, name: rest.join(' ').toUpperCase(), size };
+  }).filter(p => p.num || p.name);
+}
+
+function importRoster(append) {
+  const list = parseRosterText(document.getElementById('tm-import-text').value);
+  if (!list.length) { showToast('Nothing to import'); return; }
+  TB.players = append ? TB.players.concat(list) : list;
+  if (!append) TB.previewIdx = 0;
+  document.getElementById('tm-import-text').value = '';
+  toggleImport(false);
+  renderRoster();
+  updatePreview();
+  showToast(`✅ Imported ${list.length} players`);
+}
+
+function stepPreview(dir) {
+  const n = TB.players.length;
+  if (!n) return;
+  TB.previewIdx = ((TB.previewIdx + dir) % n + n) % n;
+  renderRoster();
+  updatePreview();
+}
+
 function schedulePreview() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 280);
@@ -1485,10 +1714,32 @@ function schedulePreview() {
 
 function updatePreview() {
   if (!tmBaseURL) return;
-  const first = TB.players.find(p => p.num || p.name) || { num:'10', name:'PLAYER' };
-  renderPlayerCanvas(first, tmBaseURL, 1).then(url => {
+  const n = TB.players.length;
+  if (TB.previewIdx >= n) TB.previewIdx = Math.max(0, n - 1);
+  const p = TB.players[TB.previewIdx];
+  const player = p && (p.num || p.name) ? p : { num:'10', name:'PLAYER' };
+  document.getElementById('tm-preview-label').textContent = n
+    ? `${[p.name, p.num, p.size].filter(Boolean).join(' · ') || 'Empty row'} (${TB.previewIdx + 1} / ${n})`
+    : 'Preview';
+  renderPlayerCanvas(player, tmBaseURL, 1).then(url => {
     document.getElementById('tm-preview-img').src = url;
   });
+}
+
+// Centre a text on its visible glyphs, not its text box: side bearings
+// (e.g. a "1") and the trailing letter-spacing otherwise push it off-centre
+function tmCentreInk(text, x) {
+  const el = text.toCanvasElement();
+  const ctx = el.getContext('2d', { willReadFrequently: true });
+  const { width: w, height: h } = el;
+  const d = ctx.getImageData(0, 0, w, h).data;
+  let l = w, r = -1;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+    if (d[(yy*w + xx)*4 + 3] > 20) { if (xx < l) l = xx; if (xx > r) r = xx; }
+  }
+  if (r < 0) return;
+  const inkCentre = (l + r + 1) / 2 / w;          // 0..1 across the rendered box
+  text.set('left', x - (inkCentre - 0.5) * text.getScaledWidth());
 }
 
 function renderPlayerCanvas(player, baseURL, scale) {
@@ -1497,8 +1748,10 @@ function renderPlayerCanvas(player, baseURL, scale) {
     const H = S.canvas.height;
     const nameColor = document.getElementById('tm-name-color').value;
     const numColor  = document.getElementById('tm-num-color').value;
-    const pct  = id => parseInt(document.getElementById(id).value) / 100;
+    const pct  = id => parseFloat(document.getElementById(id).value) / 100;
     const x    = W * pct('tm-x');
+    const numFont  = document.getElementById('tm-num-font').value;
+    const nameFont = document.getElementById('tm-name-font').value || numFont;
     const tmp = new fabric.StaticCanvas(null, { width:W, height:H });
 
     fabric.Image.fromURL(baseURL, img => {
@@ -1510,22 +1763,28 @@ function renderPlayerCanvas(player, baseURL, scale) {
           left: x, top: H * pct('tm-name-y'),
           originX:'center', originY:'center',
           fontSize: Math.round(W*0.062*pct('tm-name-size')),
-          fontFamily:'Inter', fontWeight:'bold',
+          fontFamily: nameFont, fontWeight:'bold',
           fill: nameColor, charSpacing: 160,
         });
         // Long surnames shrink to stay inside the shirt
         if (TB.maxNameW && name.width > TB.maxNameW) name.scale(TB.maxNameW / name.width);
+        tmCentreInk(name, x);
         tmp.add(name);
       }
 
       if (player.num) {
-        tmp.add(new fabric.Text(String(player.num), {
+        const num = new fabric.Text(String(player.num), {
           left: x, top: H * pct('tm-num-y'),
           originX:'center', originY:'center',
           fontSize: Math.round(W*0.21*pct('tm-num-size')),
-          fontFamily:'Inter', fontWeight:'bold',
+          fontFamily: numFont, fontWeight:'bold',
           fill: numColor,
-        }));
+          charSpacing: parseInt(document.getElementById('tm-num-spacing').value) || 0,
+        });
+        // Wide fonts / two digits shrink to stay inside the shirt
+        if (TB.maxNumW && num.width > TB.maxNumW) num.scale(TB.maxNumW / num.width);
+        tmCentreInk(num, x);
+        tmp.add(num);
       }
 
       tmp.requestRenderAll();
@@ -1549,6 +1808,7 @@ async function generateTeamZip() {
 
   const zip = new JSZip();
   const used = new Set();
+  const csv  = [['Number', 'Name', 'Size', 'File']];
   for (let i=0; i<valid.length; i++) {
     const p = valid[i];
     prog.textContent = `Generating ${i+1} / ${valid.length}…`;
@@ -1557,12 +1817,17 @@ async function generateTeamZip() {
     const b64  = dataURL.split(',')[1];
     // Strip characters that would create folders or are invalid on Windows/macOS
     const safe = s => String(s).replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g,'_');
-    const stem = `${(safe(p.num) || String(i+1)).padStart(2,'0')}_${safe(p.name) || 'PLAYER'}`;
+    const stem = `${(safe(p.num) || String(i+1)).padStart(2,'0')}_${safe(p.name) || 'PLAYER'}${p.size ? '_' + safe(p.size) : ''}`;
     let name = `${stem}.png`;
     for (let n=2; used.has(name); n++) name = `${stem}_${n}.png`;
     used.add(name);
     zip.file(name, b64, { base64:true });
+    csv.push([p.num, p.name, p.size || '', name]);
   }
+  // Order sheet for the print shop, sorted by size then number
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const rows = csv.slice(1).sort((a, b) => tmSizeRank(a[2]) - tmSizeRank(b[2]) || (parseInt(a[0]) || 0) - (parseInt(b[0]) || 0));
+  zip.file('roster.csv', [csv[0], ...rows].map(r => r.map(q).join(',')).join('\r\n'));
 
   prog.textContent = 'Zipping…';
   const blob = await zip.generateAsync({ type:'blob' });
@@ -1638,6 +1903,152 @@ function attachHexField(picker) {
   show();
 }
 document.querySelectorAll('input[type=color]').forEach(attachHexField);
+
+/* ── FONT PICKER ─────────────────────────────────── */
+// Replaces a font <select> with a searchable list where every font is shown
+// in itself, using sample text (player name/number, the selected text layer).
+// The <select> stays the source of truth, so existing code keeps using .value.
+const FPICK_RECENT_KEY = 'font-recent';
+let fpickActive = null;
+
+function fpickRecent() {
+  try { return JSON.parse(localStorage.getItem(FPICK_RECENT_KEY)) || []; } catch (e) { return []; }
+}
+
+function attachFontPicker(sel, sampleFn) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'fpick-btn';
+  btn.innerHTML = '<span></span>';
+  sel.style.display = 'none';
+  sel.after(btn);
+
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const show = () => {
+    const opt = sel.options[sel.selectedIndex];
+    const span = btn.firstChild;
+    span.textContent = opt ? opt.textContent : '';
+    span.style.fontFamily = opt && opt.value ? `"${opt.value}", Inter, sans-serif` : 'Inter, sans-serif';
+  };
+  // Mirror programmatic writes (props panel, saved choice)
+  Object.defineProperty(sel, 'value', {
+    get() { return desc.get.call(sel); },
+    set(v) { desc.set.call(sel, v); show(); },
+  });
+  sel.addEventListener('change', show);
+  btn.addEventListener('click', e => { e.stopPropagation(); fpickOpen(sel, btn, sampleFn); });
+  show();
+}
+
+function fpickOpen(sel, btn, sampleFn) {
+  let pop = document.getElementById('fpick-pop');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'fpick-pop';
+    pop.innerHTML = '<input class="fi" placeholder="Search fonts…" spellcheck="false"><div id="fpick-list"></div>';
+    pop.addEventListener('click', e => e.stopPropagation());
+    document.body.appendChild(pop);
+    const input = pop.querySelector('input');
+    input.addEventListener('input', () => fpickRender());
+    input.addEventListener('keydown', e => {
+      const items = [...pop.querySelectorAll('.fpick-item')];
+      let i = items.findIndex(el => el.classList.contains('kb'));
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[i]?.classList.remove('kb');
+        i = e.key === 'ArrowDown' ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+        items[i]?.classList.add('kb');
+        items[i]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        (items[i] || items[0])?.click();
+      } else if (e.key === 'Escape') {
+        e.stopPropagation();
+        fpickClose();
+      }
+    });
+  }
+  fpickActive = { sel, sampleFn };
+  const r = btn.getBoundingClientRect();
+  const h = Math.min(420, window.innerHeight - 16);
+  pop.style.maxHeight = h + 'px';
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 308)) + 'px';
+  pop.style.top  = (r.bottom + 4 + h > window.innerHeight ? Math.max(8, r.top - 4 - h) : r.bottom + 4) + 'px';
+  pop.style.display = 'flex';
+  const input = pop.querySelector('input');
+  input.value = '';
+  fpickRender();
+  input.focus();
+  pop.querySelector('.fpick-item.on')?.scrollIntoView({ block: 'center' });
+}
+
+function fpickClose() {
+  const pop = document.getElementById('fpick-pop');
+  if (pop) pop.style.display = 'none';
+  fpickActive = null;
+}
+
+function fpickRender() {
+  const { sel, sampleFn } = fpickActive;
+  const pop  = document.getElementById('fpick-pop');
+  const list = document.getElementById('fpick-list');
+  const q = pop.querySelector('input').value.trim().toLowerCase();
+  const sample = (sampleFn && sampleFn()) || 'ABC 123';
+  const opts = [...sel.options].filter(o => !q || o.textContent.toLowerCase().includes(q));
+
+  const item = o => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fpick-item' + (o.value === sel.value ? ' on' : '');
+    const s = document.createElement('span');
+    s.className = 's';
+    s.textContent = o.value ? sample : o.textContent;
+    s.style.fontFamily = o.value ? `"${o.value}", Inter, sans-serif` : 'Inter, sans-serif';
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = o.value ? o.textContent : '';
+    b.append(s, n);
+    b.onclick = () => {
+      sel.value = o.value;
+      sel.dispatchEvent(new Event('change'));
+      if (o.value) {
+        const rec = [o.value, ...fpickRecent().filter(v => v !== o.value)].slice(0, 6);
+        try { localStorage.setItem(FPICK_RECENT_KEY, JSON.stringify(rec)); } catch (e) {}
+      }
+      fpickClose();
+    };
+    return b;
+  };
+  const section = title => {
+    const d = document.createElement('div');
+    d.className = 'fpick-sec';
+    d.textContent = title;
+    return d;
+  };
+
+  list.innerHTML = '';
+  const recent = q ? [] : fpickRecent().map(v => opts.find(o => o.value === v)).filter(Boolean);
+  if (recent.length) {
+    list.append(section('Recent'), ...recent.map(item), section('All fonts'));
+  }
+  list.append(...opts.map(item));
+  if (!opts.length) list.append(section('No fonts match'));
+}
+
+document.addEventListener('click', () => fpickActive && fpickClose());
+
+{
+  // Sample text: what the font will actually be used for
+  const tmSample = which => () => {
+    const p = TB.players[TB.previewIdx] || {};
+    return which === 'num' ? (p.num || '10') : (p.name || 'PLAYER');
+  };
+  attachFontPicker(document.getElementById('tm-num-font'),  tmSample('num'));
+  attachFontPicker(document.getElementById('tm-name-font'), tmSample('name'));
+  attachFontPicker(document.getElementById('prop-font'), () => {
+    const o = S.canvas.getActiveObject();
+    return o && o.text ? o.text.slice(0, 24) : 'Текст 123';
+  });
+}
 </script>
 </body>
 </html>
