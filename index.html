@@ -580,6 +580,13 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           </div>
         </div>
         <div class="fg" style="margin:6px 0 0">
+          <label>Name spacing</label>
+          <div class="rr">
+            <input type="range" id="tm-name-spacing" min="0" max="400" value="60" data-unit="" oninput="tmSlider(this)">
+            <span class="rv" id="tm-name-spacing-val">60</span>
+          </div>
+        </div>
+        <div class="fg" style="margin:6px 0 0">
           <label>Number spacing</label>
           <div class="rr">
             <input type="range" id="tm-num-spacing" min="0" max="400" value="80" data-unit="" oninput="tmSlider(this)">
@@ -622,7 +629,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
         <span id="tm-preview-label" style="font-size:11px;color:var(--dim);min-width:180px;text-align:center;text-transform:uppercase;letter-spacing:.4px">Preview</span>
         <button class="btn btn-panel" style="padding:4px 10px" onclick="stepPreview(1)" title="Next player">›</button>
       </div>
-      <img id="tm-preview-img" style="max-height:380px;max-width:100%;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.6);object-fit:contain" src="">
+      <img id="tm-preview-img" title="Нажмите, чтобы увеличить" onclick="tmZoomPreview()" style="max-height:380px;max-width:100%;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.6);object-fit:contain;cursor:zoom-in" src="">
       <div id="tm-progress" style="display:none;font-size:12px;color:var(--dim);text-align:center;min-height:18px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
@@ -1412,8 +1419,15 @@ function exportCanvas() {
 
   const scale = parseInt(document.getElementById('export-quality').value) || 2;
 
-  // ★ FIX: use scale multiplier for high-quality output
-  const dataURL = S.canvas.toDataURL({ format:'png', multiplier: scale });
+  // Supersampled like Team Builder renders, so hairline font details survive
+  const ss = Math.ceil(4 / scale);
+  const big = S.canvas.toCanvasElement(scale * ss);
+  const sized = document.createElement('canvas');
+  sized.width = S.canvas.width * scale; sized.height = S.canvas.height * scale;
+  const sctx = sized.getContext('2d');
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(big, 0, 0, sized.width, sized.height);
+  const dataURL = sized.toDataURL('image/png');
 
   const wm = new Image();
   wm.crossOrigin = 'anonymous';
@@ -1791,6 +1805,7 @@ function applyLogoPreset(logo) {
 /* ── TEAM BUILDER ────────────────────────────────── */
 const TB = { players: [], autoFor: null, maxNameW: 0, maxNumW: 0, previewIdx: 0, xManual: false };
 const TM_DEFAULT_FONT = 'Arsenal2425';
+const TM_PREVIEW_SCALE = 2;
 const TM_SIZE_ORDER = ['XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];
 let tmBaseURL = null;
 let previewTimer = null;
@@ -1799,7 +1814,8 @@ function openTeamBuilder() {
   if (!S.jerseyImg) { showToast('Load a jersey first'); return; }
   document.getElementById('team-modal').style.display = 'flex';
   tmInitFonts();
-  tmBaseURL = getBaseDataURL(1);
+  // Preview at 2×: at 1× thin details (e.g. the inline in Man United digits) blur on Retina screens
+  tmBaseURL = getBaseDataURL(TM_PREVIEW_SCALE);
   if (!TB.players.length) addDefaultSquad();
   else { renderRoster(); updatePreview(); }
   // First open with this jersey → place name/number automatically
@@ -2160,6 +2176,24 @@ function stepPreview(dir) {
   updatePreview();
 }
 
+// Full-size look at the preview: fine details (inline outlines in club fonts) are
+// too small to see in the thumbnail. Scroll/pan, click or Esc to close.
+function tmZoomPreview() {
+  const src = document.getElementById('tm-preview-img').src;
+  if (!src) return;
+  const z = document.createElement('div');
+  z.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.92);overflow:auto;cursor:zoom-out;display:flex;justify-content:center';
+  z.innerHTML = `<img src="${src}" style="width:min(1400px,180vw);height:auto;margin:auto;display:block">`;
+  const close = () => { z.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  z.addEventListener('click', close);
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(z);
+  // Start at the back of the shirt, where the name and number are
+  z.scrollLeft = (z.scrollWidth - z.clientWidth) * parseFloat(document.getElementById('tm-x').value) / 100;
+  z.scrollTop  = (z.scrollHeight - z.clientHeight) * 0.15;
+}
+
 function schedulePreview() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 280);
@@ -2174,7 +2208,7 @@ function updatePreview() {
   document.getElementById('tm-preview-label').textContent = n
     ? `${[p.name, p.num, p.size].filter(Boolean).join(' · ') || 'Empty row'} (${TB.previewIdx + 1} / ${n})`
     : 'Preview';
-  renderPlayerCanvas(player, tmBaseURL, 1).then(url => {
+  renderPlayerCanvas(player, tmBaseURL, TM_PREVIEW_SCALE).then(url => {
     document.getElementById('tm-preview-img').src = url;
   });
 }
@@ -2217,7 +2251,7 @@ function renderPlayerCanvas(player, baseURL, scale) {
           originX:'center', originY:'center',
           fontSize: Math.round(W*0.062*pct('tm-name-size')),
           fontFamily: nameFont, fontWeight:'normal',
-          fill: nameColor, charSpacing: 160,
+          fill: nameColor, charSpacing: parseInt(document.getElementById('tm-name-spacing').value) || 0,
         });
         // Long surnames shrink to stay inside the shirt
         if (TB.maxNameW && name.width > TB.maxNameW) name.scale(TB.maxNameW / name.width);
@@ -2241,9 +2275,18 @@ function renderPlayerCanvas(player, baseURL, scale) {
       }
 
       tmp.requestRenderAll();
-      const url = tmp.toDataURL({ format:'png', multiplier: scale });
+      // Supersample: club fonts have hairline details (Man United's inline outline)
+      // that anti-aliasing fills in below ~4×. Draw at ≥4× and scale down.
+      const ss = scale >= 4 ? 1 : Math.ceil(4 / scale);
+      const big = tmp.toCanvasElement(scale * ss);
       tmp.dispose();
-      resolve(url);
+      if (ss === 1) { resolve(big.toDataURL('image/png')); return; }
+      const out = document.createElement('canvas');
+      out.width = Math.round(W * scale); out.height = Math.round(H * scale);
+      const ctx = out.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(big, 0, 0, out.width, out.height);
+      resolve(out.toDataURL('image/png'));
     });
   });
 }
@@ -2528,7 +2571,7 @@ async function loadCloudList() {
 }
 
 // Team Builder settings that belong to a design
-const TM_SAVED_SLIDERS = ['tm-x','tm-name-y','tm-num-y','tm-name-size','tm-num-size','tm-num-spacing'];
+const TM_SAVED_SLIDERS = ['tm-x','tm-name-y','tm-num-y','tm-name-size','tm-num-size','tm-name-spacing','tm-num-spacing'];
 const TM_SAVED_FIELDS  = ['tm-name-color','tm-num-color','tm-name-font','tm-num-font'];
 
 // Images the user uploaded only exist in this browser (blob: URLs), so they are
