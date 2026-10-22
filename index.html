@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 /* ── TOKENS ──────────────────────────────────────── */
 :root {
@@ -69,6 +70,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 .btn-ghost{background:transparent;color:var(--dim);border:1px solid var(--border)}.btn-ghost:hover{background:var(--panel2);color:var(--text)}
 .btn-panel{background:var(--panel2);color:var(--dim);border:1px solid var(--border2);width:100%;margin-bottom:5px}.btn-panel:hover{background:var(--panel3);color:var(--text)}
 .btn-download{background:var(--accent);color:#000;padding:8px 18px;font-size:13px}.btn-download:hover{background:var(--accent2)}
+.btn:disabled{opacity:.35;cursor:default}
 .btn-row{display:flex;gap:6px;margin-bottom:4px}.btn-row .btn{flex:1}
 .btn-danger{color:var(--danger)!important;border-color:#2d1a1a!important}
 
@@ -181,7 +183,26 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
   #left-panel.open{display:block}
   #fab-left{display:flex}
 }
+/* Header buttons scroll sideways when they don't fit */
+#header{min-width:0}
+#header-right{min-width:0;overflow-x:auto;scrollbar-width:none}
+#header-right::-webkit-scrollbar{display:none}
+@media(max-width:600px){
+  #header{gap:8px;padding:0 10px}
+  .logo > span:not(.logo-mark), .tagline{display:none}
+  #canvas-area{padding:8px}
+  /* Team Builder: one scrolling column, preview first */
+  .tm-sub{display:none}
+  .tm-body{flex-direction:column;overflow-y:auto!important}
+  .tm-left{width:100%!important;border-right:none!important;overflow:visible!important}
+  .tm-roster{overflow:visible!important;flex:none!important}
+  .tm-right{order:-1;flex:none!important;padding:12px!important;overflow:visible!important}
+  #tm-preview-img{max-height:300px!important}
+}
 #fab-left{display:none;position:fixed;bottom:16px;left:16px;z-index:100;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;align-items:center;justify-content:center}
+/* After the base FAB rules, otherwise those win and the panels can't be opened */
+@media(max-width:900px){#fab-props{display:flex}}
+@media(max-width:600px){#fab-left{display:flex}}
 </style>
 </head>
 <body>
@@ -200,6 +221,8 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       <option value="2" selected>2× хорошо</option>
       <option value="3">3× макс</option>
     </select>
+    <button class="btn btn-ghost" id="undo-btn" onclick="History.undo()" title="Отменить (⌘Z)" disabled>↶</button>
+    <button class="btn btn-ghost" id="redo-btn" onclick="History.redo()" title="Повторить (⇧⌘Z)" disabled>↷</button>
     <button class="btn btn-ghost" onclick="openTeamBuilder()">👥 Team Builder</button>
     <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
     <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
@@ -264,6 +287,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     </label>
     <input type="file" id="file-badge" accept="image/*" onchange="addBadge(event)">
     <button class="btn btn-panel" style="margin-top:6px" onclick="openLogoGallery()">🏆 Пресеты логотипов</button>
+    <button class="btn btn-panel" style="margin-top:6px" onclick="addKitTexts()" title="SARAISHYQ BILIM на груди и MEZUNS’27 на спине — можно изменить текст">🏷 Спонсор + надпись на спине</button>
     <label for="file-sponsor" class="uz" style="margin-top:8px">
       <div class="ico">🤝</div>
       <div>Спонсор</div>
@@ -450,12 +474,12 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
 <div id="team-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:none;flex-direction:column">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
     <h2 style="font-size:14px;font-weight:700">👥 Team Builder</h2>
-    <span style="font-size:11px;color:var(--muted);margin-right:auto">Badge &amp; sponsor from current design — name/number added per player</span>
+    <span class="tm-sub" style="font-size:11px;color:var(--muted);margin-right:auto">Badge &amp; sponsor from current design — name/number added per player</span>
     <button class="btn btn-ghost" onclick="closeTeamBuilder()">✕ Close</button>
   </div>
-  <div style="display:flex;flex:1;overflow:hidden">
+  <div class="tm-body" style="display:flex;flex:1;overflow:hidden">
     <!-- LEFT: roster -->
-    <div style="width:320px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+    <div class="tm-left" style="width:320px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:12px 14px;border-bottom:1px solid var(--border2)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Squad</span>
@@ -532,7 +556,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
           </div>
         </div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:8px 14px">
+      <div class="tm-roster" style="flex:1;overflow-y:auto;padding:8px 14px">
         <table style="width:100%;border-collapse:collapse">
           <thead>
             <tr style="border-bottom:1px solid var(--border2)">
@@ -561,7 +585,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       </div>
     </div>
     <!-- RIGHT: preview + generate -->
-    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto">
+    <div class="tm-right" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;overflow-y:auto">
       <div style="display:flex;align-items:center;gap:10px">
         <button class="btn btn-panel" style="padding:4px 10px" onclick="stepPreview(-1)" title="Previous player">‹</button>
         <span id="tm-preview-label" style="font-size:11px;color:var(--dim);min-width:180px;text-align:center;text-transform:uppercase;letter-spacing:.4px">Preview</span>
@@ -569,7 +593,10 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       </div>
       <img id="tm-preview-img" style="max-height:380px;max-width:100%;border-radius:4px;box-shadow:0 0 60px rgba(0,0,0,.6);object-fit:contain" src="">
       <div id="tm-progress" style="display:none;font-size:12px;color:var(--dim);text-align:center;min-height:18px"></div>
-      <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
+        <button id="tm-pdf-btn" class="btn btn-panel" style="font-size:13px;padding:10px 18px" onclick="downloadOrderPdf()">📄 Order sheet PDF</button>
+      </div>
     </div>
   </div>
 </div>
@@ -644,12 +671,86 @@ const S = {
 };
 let lc = 0; // layer counter
 
+/* ── UNDO / REDO ─────────────────────────────────── */
+// Snapshots of the whole canvas. Rather than hooking every edit, we compare the
+// serialized canvas shortly after each render and record it when it changed.
+const HISTORY_PROPS = ['selectable','evented','hoverCursor','charSpacing','tmKeep','layerName'];
+const History = {
+  stack: [], idx: -1, timer: null, restoring: false,
+
+  serialize() {
+    S.canvas.getObjects().forEach(o => { const m = S.meta.get(o); o.layerName = m ? m.name : undefined; });
+    return JSON.stringify({ w: S.canvas.width, h: S.canvas.height, json: S.canvas.toJSON(HISTORY_PROPS) });
+  },
+  schedule() {
+    if (this.restoring) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.record(), 350);
+  },
+  record() {
+    if (this.restoring || !S.canvas) return;
+    const snap = this.serialize();
+    if (snap === this.stack[this.idx]) return;
+    this.stack = this.stack.slice(0, this.idx + 1);
+    this.stack.push(snap);
+    if (this.stack.length > 60) this.stack.shift();
+    this.idx = this.stack.length - 1;
+    this.updateButtons();
+  },
+  undo() { if (this.idx > 0) this.restore(--this.idx); },
+  redo() { if (this.idx < this.stack.length - 1) this.restore(++this.idx); },
+  restore(i) {
+    this.restoring = true;
+    clearTimeout(this.timer);
+    const { w, h, json } = JSON.parse(this.stack[i]);
+    S.meta.clear();
+    initCanvas(w, h);
+    S.canvas.loadFromJSON(json, () => {
+      const objs = S.canvas.getObjects();
+      S.jerseyImg    = objs.find(o => o.type === 'image' && o.selectable === false) || null;
+      jerseyTintRect = objs.find(o => o.type === 'rect'  && o.selectable === false) || null;
+      document.getElementById('jersey-tint-on').checked = !!jerseyTintRect;
+      document.getElementById('jersey-tint-controls').style.display = jerseyTintRect ? '' : 'none';
+      objs.forEach(o => {
+        if (o.selectable === false) return;
+        const isText = o.type === 'text' || o.type === 'i-text';
+        S.meta.set(o, { id: ++lc, type: isText ? 'text' : 'image', name: o.layerName || (isText ? `Текст: ${o.text}` : 'Изображение') });
+      });
+      document.getElementById('canvas-placeholder').style.opacity = S.jerseyImg ? '0' : '';
+      clearProps();
+      updateLayers();
+      S.canvas.requestRenderAll();
+      // Let the restore render settle before watching for changes again
+      setTimeout(() => { this.restoring = false; this.updateButtons(); }, 0);
+    });
+  },
+  updateButtons() {
+    document.getElementById('undo-btn').disabled = this.idx <= 0;
+    document.getElementById('redo-btn').disabled = this.idx >= this.stack.length - 1;
+  },
+};
+
 /* ── INIT CANVAS ─────────────────────────────────── */
+// Show the canvas scaled down to fit its area (phones, small windows).
+// Only the CSS size changes: exports and coordinates stay at full size.
+function fitCanvas() {
+  if (!S.canvas) return;
+  const area = document.getElementById('canvas-area');
+  const cs = getComputedStyle(area);
+  const aw = area.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 16;
+  const ah = area.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom) - 16;
+  const W = S.canvas.width, H = S.canvas.height;
+  const k = Math.min(1, aw / W, ah / H);
+  const wrap = document.getElementById('canvas-wrap');
+  wrap.style.width  = W * k + 'px';
+  wrap.style.height = H * k + 'px';
+  S.canvas.setDimensions({ width: W * k + 'px', height: H * k + 'px' }, { cssOnly: true });
+  S.canvas.calcOffset();
+}
+window.addEventListener('resize', fitCanvas);
+
 function initCanvas(w=600, h=700) {
   if (S.canvas) { try { S.canvas.dispose(); } catch(e){} }
-  const wrap = document.getElementById('canvas-wrap');
-  wrap.style.width  = w+'px';
-  wrap.style.height = h+'px';
 
   S.canvas = new fabric.Canvas('c', {
     width: w, height: h,
@@ -664,6 +765,9 @@ function initCanvas(w=600, h=700) {
   S.canvas.on('object:added',       updateLayers);
   S.canvas.on('object:removed',     updateLayers);
   S.canvas.on('object:modified',    updateLayers);
+  // Any visible change (move, recolour, add, delete, tint…) → maybe a new undo step
+  S.canvas.on('after:render',       () => History.schedule());
+  fitCanvas();
 }
 initCanvas();
 
@@ -1194,7 +1298,7 @@ function exportCanvas() {
 /* ── SAVE / LOAD ──────────────────────────────────── */
 function saveProject() {
   try {
-    const json = S.canvas.toJSON(['selectable','evented','hoverCursor','charSpacing']);
+    const json = S.canvas.toJSON(['selectable','evented','hoverCursor','charSpacing','tmKeep']);
     localStorage.setItem('derby_proj',  JSON.stringify(json));
     localStorage.setItem('derby_size',  JSON.stringify({ w:S.canvas.width, h:S.canvas.height }));
     showToast('Проект сохранён');
@@ -1210,6 +1314,7 @@ function loadProject() {
     S.meta.clear();
     initCanvas(sz.w, sz.h);
     S.canvas.loadFromJSON(json, () => {
+      S.jerseyImg = S.canvas.getObjects().find(o => o.type === 'image' && o.selectable === false) || null;
       S.canvas.getObjects().forEach(obj => {
         if (!obj.selectable) return;
         const isText = obj.type==='text'||obj.type==='i-text';
@@ -1231,6 +1336,44 @@ function loadProject() {
 // Spots measured on a real kit, in units of the front shirt's geometry:
 // chest at 0.58·D below the shoulders, shorts 0.27·D above the hem
 const LOGO_AREA_NAMES = { chest: 'грудь', shorts: 'шорты' };
+
+// Default kit texts, positioned like a real printed kit (units of D = shoulder→armpit):
+// sponsor on the front at 1.0·D, slogan on the back at 1.70·D (below the number)
+const KIT_TEXTS = [
+  { side: 'front', text: 'SARAISHYQ\nBILIM', y: 1.0,  cap: 0.095, font: 'MontserratSemiBold', spacing: 40, name: 'Спонсор' },
+  { side: 'back',  text: 'MEZUNS’27',        y: 1.70, cap: 0.14,  font: null,                 spacing: 40, name: 'Надпись на спине' },
+];
+
+function addKitTexts() {
+  if (!S.jerseyImg) { showToast('Сначала выберите форму'); return; }
+  const front = tmDetectKit('front'), back = tmDetectKit('back');
+  if (!front || !back) { showToast('Не удалось найти форму на изображении'); return; }
+  const fonts = [...document.getElementById('prop-font').options].map(o => o.value);
+  const pickFont = f => fonts.includes(f) ? f : 'Inter';
+  KIT_TEXTS.forEach(t => {
+    const kit = t.side === 'front' ? front : back;
+    const shirtC  = tmSampleKit(kit.cx, kit.top + 0.9 * kit.D, 0.12 * kit.D);
+    const legs    = kit.shortsAt(kit.hem - 0.27 * kit.D);
+    const shortsC = tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), kit.hem - 0.27 * kit.D, 0.1 * kit.D);
+    const obj = new fabric.Text(t.text, {
+      left: kit.cx, top: kit.top + t.y * kit.D,
+      originX: 'center', originY: 'center', textAlign: 'center',
+      // Caps are ≈0.72 em tall in these fonts
+      fontSize: Math.round(t.cap * kit.D / 0.72), lineHeight: 1.05,
+      fontFamily: pickFont(t.font || document.getElementById('tm-num-font').value || TM_DEFAULT_FONT),
+      fontWeight: 'bold', charSpacing: t.spacing,
+      fill: tmLogoColor(shirtC, shortsC),
+    });
+    obj.tmKeep = true;   // keep it in Team Builder exports
+    const maxW = kit.torsoW * 0.8;
+    if (obj.width > maxW) obj.scale(maxW / obj.width);
+    S.meta.set(obj, { id: ++lc, type: 'text', name: `${t.name}: ${t.text.replace('\n', ' ')}` });
+    S.canvas.add(obj);
+  });
+  S.canvas.requestRenderAll();
+  updateLayers();
+  showToast('Спонсор и надпись добавлены — текст можно изменить справа');
+}
 
 // Median colour of the jersey image in a square around (x, y), canvas units
 function tmSampleKit(x, y, r) {
@@ -1369,7 +1512,8 @@ function closeTeamBuilder() {
 
 // Base = current design without text layers, rendered at `scale` so 2×/3× exports stay sharp
 function getBaseDataURL(scale) {
-  const texts = S.canvas.getObjects().filter(o => o.selectable && (o.type==='text'||o.type==='i-text'));
+  // Kit texts (sponsor, back slogan) stay; other text layers are per-player placeholders
+  const texts = S.canvas.getObjects().filter(o => o.selectable && !o.tmKeep && (o.type==='text'||o.type==='i-text'));
   const wasVisible = texts.map(t => t.visible);
   texts.forEach(t => t.set('visible', false));
   S.canvas.requestRenderAll();
@@ -1829,6 +1973,10 @@ async function generateTeamZip() {
   const rows = csv.slice(1).sort((a, b) => tmSizeRank(a[2]) - tmSizeRank(b[2]) || (parseInt(a[0]) || 0) - (parseInt(b[0]) || 0));
   zip.file('roster.csv', [csv[0], ...rows].map(r => r.map(q).join(',')).join('\r\n'));
 
+  prog.textContent = 'Order sheet…';
+  const pdf = await buildOrderPdf();
+  if (pdf) zip.file('order-sheet.pdf', pdf.output('arraybuffer'));
+
   prog.textContent = 'Zipping…';
   const blob = await zip.generateAsync({ type:'blob' });
   const a = document.createElement('a');
@@ -1843,6 +1991,108 @@ async function generateTeamZip() {
   showToast(`✅ Downloaded ${valid.length} jerseys`);
 }
 
+/* ── ORDER SHEET PDF ─────────────────────────────── */
+// Pages are drawn on a canvas (A4 at 150 dpi) and placed into the PDF as images,
+// so any script (Latin, Cyrillic, Kazakh) and our own fonts render correctly.
+async function buildOrderPdf(onProgress) {
+  const valid = TB.players.filter(p => p.num || p.name);
+  if (!valid.length) return null;
+  const PW = 1240, PH = 1754, M = 80;
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  let first = true;
+  const newPage = () => {
+    const c = document.createElement('canvas'); c.width = PW; c.height = PH;
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, PW, PH);
+    x.fillStyle = '#111'; x.textBaseline = 'alphabetic';
+    return { c, x };
+  };
+  const addPage = c => {
+    if (!first) pdf.addPage();
+    first = false;
+    pdf.addImage(c.toDataURL('image/jpeg', 0.88), 'JPEG', 0, 0, 210, 297);
+  };
+  const font = (px, w = 400) => `${w} ${px}px Inter, sans-serif`;
+  const date = new Date().toLocaleDateString('ru-RU');
+
+  // Page 1+: summary and the list, sorted by size then number (how a print shop works)
+  const sorted = [...valid].sort((a, b) => tmSizeRank(a.size) - tmSizeRank(b.size) || (parseInt(a.num) || 0) - (parseInt(b.num) || 0));
+  const counts = {};
+  valid.forEach(p => { const k = p.size || '—'; counts[k] = (counts[k] || 0) + 1; });
+  const sizeKeys = Object.keys(counts).sort((a, b) => tmSizeRank(a) - tmSizeRank(b));
+
+  let { c, x } = newPage();
+  x.font = font(44, 700); x.fillText('Order sheet', M, M + 40);
+  x.font = font(22); x.fillStyle = '#666';
+  x.fillText(`${date}  ·  ${valid.length} players`, M, M + 80);
+
+  // Size totals as a row of boxes
+  let bx = M, by = M + 120;
+  sizeKeys.forEach(k => {
+    x.strokeStyle = '#ccc'; x.lineWidth = 2; x.strokeRect(bx, by, 120, 84);
+    x.fillStyle = '#666'; x.font = font(20); x.fillText(k, bx + 14, by + 30);
+    x.fillStyle = '#111'; x.font = font(36, 700); x.fillText(String(counts[k]), bx + 14, by + 70);
+    bx += 132;
+    if (bx + 120 > PW - M) { bx = M; by += 96; }
+  });
+
+  // Table
+  const cols = [M, M + 90, M + 230, PW - M - 160];   // row #, number, name, size
+  let y = by + 150;
+  const header = () => {
+    x.fillStyle = '#666'; x.font = font(18, 700);
+    ['#', 'NUMBER', 'NAME', 'SIZE'].forEach((h, i) => x.fillText(h, cols[i], y));
+    y += 14; x.fillStyle = '#111'; x.fillRect(M, y, PW - 2*M, 2); y += 40;
+  };
+  header();
+  sorted.forEach((p, i) => {
+    if (y > PH - M) { addPage(c); ({ c, x } = newPage()); y = M + 20; header(); }
+    if (i % 2) { x.fillStyle = '#f4f4f4'; x.fillRect(M, y - 30, PW - 2*M, 42); }
+    x.fillStyle = '#999'; x.font = font(20); x.fillText(String(i + 1), cols[0], y);
+    x.fillStyle = '#111'; x.font = font(26, 700); x.fillText(p.num || '—', cols[1], y);
+    x.font = font(24); x.fillText(p.name || '—', cols[2], y);
+    x.font = font(24, 700); x.fillText(p.size || '—', cols[3], y);
+    y += 42;
+  });
+  addPage(c);
+
+  // Preview pages: 3 × 4 kit renders, same order as the list
+  const base = getBaseDataURL(1);
+  const CW = (PW - 2*M - 40) / 3, CH = (PH - 2*M - 60) / 4;
+  for (let i = 0; i < sorted.length; i++) {
+    if (i % 12 === 0) ({ c, x } = newPage());
+    onProgress && onProgress(i + 1, sorted.length);
+    const p = sorted[i];
+    const img = new Image();
+    img.src = await renderPlayerCanvas(p, base, 1);
+    await img.decode();
+    const col = i % 3, row = Math.floor(i % 12 / 3);
+    const cx = M + col * (CW + 20), cy = M + row * (CH + 20);
+    const k = Math.min(CW / img.width, (CH - 44) / img.height);
+    x.drawImage(img, cx + (CW - img.width * k) / 2, cy, img.width * k, img.height * k);
+    x.fillStyle = '#111'; x.font = font(22, 700); x.textAlign = 'center';
+    x.fillText([p.num, p.name, p.size].filter(Boolean).join('  ·  '), cx + CW / 2, cy + CH - 12);
+    x.textAlign = 'left';
+    if (i % 12 === 11 || i === sorted.length - 1) addPage(c);
+  }
+  return pdf;
+}
+
+async function downloadOrderPdf() {
+  const btn  = document.getElementById('tm-pdf-btn');
+  const prog = document.getElementById('tm-progress');
+  btn.disabled = true; prog.style.display = '';
+  try {
+    const pdf = await buildOrderPdf((i, n) => prog.textContent = `Order sheet ${i} / ${n}…`);
+    if (!pdf) { showToast('Add players first'); return; }
+    pdf.save(`order-sheet-${Math.random().toString(36).slice(2,8).toUpperCase()}.pdf`);
+    showToast('📄 Order sheet downloaded');
+  } finally {
+    btn.disabled = false; prog.style.display = 'none';
+  }
+}
+
 /* ── KEYBOARD ────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
@@ -1850,6 +2100,8 @@ document.addEventListener('keydown', e => {
   if (e.key==='Delete'||e.key==='Backspace') deleteSelected();
   if (e.key==='Escape') { S.canvas.discardActiveObject(); S.canvas.requestRenderAll(); }
   if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveProject(); }
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z') { e.preventDefault(); e.shiftKey ? History.redo() : History.undo(); }
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y') { e.preventDefault(); History.redo(); }
 });
 document.addEventListener('keydown', e => {
   if (e.key==='Escape' && document.getElementById('gallery-modal').classList.contains('open')) closeGallery();
