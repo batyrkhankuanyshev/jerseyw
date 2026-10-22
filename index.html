@@ -1512,6 +1512,7 @@ function addKitTexts() {
     obj.tmKeep = true;   // keep it in Team Builder exports
     const maxW = kit.torsoW * 0.8;
     if (obj.width > maxW) obj.scale(maxW / obj.width);
+    tmCentreInk(obj, kit.cx);
     const { color, plate } = tmChooseColor(obj.getBoundingRect(true, true), shortsC);
     obj.set({ fill: color, plate });
     tmFitPlate(obj);
@@ -1765,7 +1766,7 @@ function applyLogoPreset(logo) {
 }
 
 /* ── TEAM BUILDER ────────────────────────────────── */
-const TB = { players: [], autoFor: null, maxNameW: 0, maxNumW: 0, previewIdx: 0 };
+const TB = { players: [], autoFor: null, maxNameW: 0, maxNumW: 0, previewIdx: 0, xManual: false };
 const TM_DEFAULT_FONT = 'Arsenal2425';
 const TM_SIZE_ORDER = ['XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];
 let tmBaseURL = null;
@@ -1780,6 +1781,11 @@ function openTeamBuilder() {
   else { renderRoster(); updatePreview(); }
   // First open with this jersey → place name/number automatically
   if (TB.autoFor !== S.jerseyImg) { TB.autoFor = S.jerseyImg; tmAutoPlace(true); }
+  // Otherwise keep the name/number column on the shirt's centre line, unless it was moved by hand
+  else if (!TB.xManual) {
+    const back = tmDetectKit('back');
+    if (back) { tmSetSlider('tm-x', back.cx / S.canvas.width * 100); updatePreview(); }
+  }
 }
 
 function closeTeamBuilder() {
@@ -1876,6 +1882,7 @@ function tmFontChanged(sel) {
 }
 
 function tmSlider(input) {
+  if (input.id === 'tm-x') TB.xManual = true;
   document.getElementById(input.id + '-val').textContent = Math.round(input.value) + (input.dataset.unit ?? '%');
   schedulePreview();
 }
@@ -2045,6 +2052,7 @@ async function tmAutoPlace(silent) {
   // Proportions measured on a real printed kit: name caps ≈ 0.12·D tall at 0.45·D,
   // number ≈ 0.64·D tall centred at 0.98·D (Inter caps/digits ≈ 0.73 em)
   tmSetSlider('tm-x',        cx / W * 100);
+  TB.xManual = false;
   tmSetSlider('tm-name-y',   (top + 0.45*D) / H * 100);
   tmSetSlider('tm-num-y',    (top + 0.98*D) / H * 100);
   tmSetSlider('tm-name-size', (0.165*D) / (W*0.062) * 100);
@@ -2275,13 +2283,16 @@ async function generateTeamZip() {
 async function buildOrderPdf(onProgress) {
   const valid = TB.players.filter(p => p.num || p.name);
   if (!valid.length) return null;
-  const PW = 1240, PH = 1754, M = 80;
+  // Layout in A4-at-150-dpi units; pages are drawn at 2× that (300 dpi) for sharp prints
+  const PW = 1240, PH = 1754, M = 80, Q = 2;
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   let first = true;
   const newPage = () => {
-    const c = document.createElement('canvas'); c.width = PW; c.height = PH;
+    const c = document.createElement('canvas'); c.width = PW * Q; c.height = PH * Q;
     const x = c.getContext('2d');
+    x.scale(Q, Q);
+    x.imageSmoothingQuality = 'high';
     x.fillStyle = '#fff'; x.fillRect(0, 0, PW, PH);
     x.fillStyle = '#111'; x.textBaseline = 'alphabetic';
     return { c, x };
@@ -2289,7 +2300,7 @@ async function buildOrderPdf(onProgress) {
   const addPage = c => {
     if (!first) pdf.addPage();
     first = false;
-    pdf.addImage(c.toDataURL('image/jpeg', 0.88), 'JPEG', 0, 0, 210, 297);
+    pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
   };
   const font = (px, w = 400) => `${w} ${px}px Inter, sans-serif`;
   const date = new Date().toLocaleDateString('ru-RU');
@@ -2335,24 +2346,37 @@ async function buildOrderPdf(onProgress) {
   });
   addPage(c);
 
-  // Preview pages: 3 × 4 kit renders, same order as the list
-  const base = getBaseDataURL(1);
-  const CW = (PW - 2*M - 40) / 3, CH = (PH - 2*M - 60) / 4;
+  // Preview pages: 2 × 4 kit renders, same order as the list. Rendered at 2× and
+  // cropped to shirts + shorts (socks and empty margins add nothing to an order)
+  const RS = 2;
+  const base = getBaseDataURL(RS);
+  const W = S.canvas.width, H = S.canvas.height;
+  let crop = { x: 0, y: 0, w: W, h: H };
+  const fk = tmDetectKit('front'), bk = tmDetectKit('back');
+  if (fk && bk) {
+    const pad = fk.D * 0.12;
+    const x0 = Math.max(0, Math.min(fk.pieceL, bk.pieceL) - pad), x1 = Math.min(W, Math.max(fk.pieceR, bk.pieceR) + pad);
+    const y0 = Math.max(0, Math.min(fk.top, bk.top) - pad),       y1 = Math.min(H, Math.max(fk.hem, bk.hem) + pad);
+    crop = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  const PER = 8, COLS = 2;
+  const CW = (PW - 2*M - 40) / COLS, CH = (PH - 2*M - 60) / (PER / COLS);
   for (let i = 0; i < sorted.length; i++) {
-    if (i % 12 === 0) ({ c, x } = newPage());
+    if (i % PER === 0) ({ c, x } = newPage());
     onProgress && onProgress(i + 1, sorted.length);
     const p = sorted[i];
     const img = new Image();
-    img.src = await renderPlayerCanvas(p, base, 1);
+    img.src = await renderPlayerCanvas(p, base, RS);
     await img.decode();
-    const col = i % 3, row = Math.floor(i % 12 / 3);
-    const cx = M + col * (CW + 20), cy = M + row * (CH + 20);
-    const k = Math.min(CW / img.width, (CH - 44) / img.height);
-    x.drawImage(img, cx + (CW - img.width * k) / 2, cy, img.width * k, img.height * k);
-    x.fillStyle = '#111'; x.font = font(22, 700); x.textAlign = 'center';
+    const col = i % COLS, row = Math.floor(i % PER / COLS);
+    const cx = M + col * (CW + 40), cy = M + row * (CH + 20);
+    const k = Math.min(CW / crop.w, (CH - 44) / crop.h);
+    x.drawImage(img, crop.x * RS, crop.y * RS, crop.w * RS, crop.h * RS,
+                cx + (CW - crop.w * k) / 2, cy, crop.w * k, crop.h * k);
+    x.fillStyle = '#111'; x.font = font(24, 700); x.textAlign = 'center';
     x.fillText([p.num, p.name, p.size].filter(Boolean).join('  ·  '), cx + CW / 2, cy + CH - 12);
     x.textAlign = 'left';
-    if (i % 12 === 11 || i === sorted.length - 1) addPage(c);
+    if (i % PER === PER - 1 || i === sorted.length - 1) addPage(c);
   }
   return pdf;
 }
