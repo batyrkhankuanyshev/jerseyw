@@ -1042,7 +1042,7 @@ function addText(isNum=false) {
     originX:    'center', originY: 'center',
     fontSize:   isNum ? 100 : 40,
     fontFamily: 'Inter',
-    fontWeight: isNum ? 'bold' : 'normal',
+    fontWeight: 'normal',
     fill:       S.kitTextColor || '#ffffff',
     charSpacing: 0,
     opacity:    1,
@@ -1482,7 +1482,7 @@ const LOGO_AREA_NAMES = { chest: 'грудь', shorts: 'шорты' };
 const KIT_TEXTS = [
   { side: 'front', text: 'SARAISHYQ\nBILIM', y: 1.0, cap: 0.095, font: 'Kursk205W00Medium', weight: 'normal', spacing: 40, name: 'Спонсор',
     line2: { font: 'Kursk205W00Light', cap: 0.083 } },   // BILIM: lighter and a bit smaller
-  { side: 'back',  text: 'MEZUNS’27', y: 1.70, cap: 0.14,  font: null, weight: 'bold', spacing: 40, name: 'Надпись на спине' },
+  { side: 'back',  text: 'MEZUNS’27', y: 1.70, cap: 0.14,  font: null, weight: 'normal', spacing: 40, name: 'Надпись на спине' },
 ];
 
 function addKitTexts() {
@@ -1625,7 +1625,7 @@ function addSleeveText() {
       left: x, top: top + spot.y * D,
       originX: 'center', originY: 'center',
       fontSize: Math.round(0.087 * D / 0.72),
-      fontFamily: fonts.includes(numFont) ? numFont : 'Inter', fontWeight: 'bold', charSpacing: 20,
+      fontFamily: fonts.includes(numFont) ? numFont : 'Inter', fontWeight: 'normal', charSpacing: 20,
     });
     const maxW = torsoW * 0.32;   // stay on the sleeve
     if (obj.width > maxW) obj.scale(maxW / obj.width);
@@ -2193,7 +2193,7 @@ function renderPlayerCanvas(player, baseURL, scale) {
           left: x, top: H * pct('tm-name-y'),
           originX:'center', originY:'center',
           fontSize: Math.round(W*0.062*pct('tm-name-size')),
-          fontFamily: nameFont, fontWeight:'bold',
+          fontFamily: nameFont, fontWeight:'normal',
           fill: nameColor, charSpacing: 160,
         });
         // Long surnames shrink to stay inside the shirt
@@ -2207,7 +2207,7 @@ function renderPlayerCanvas(player, baseURL, scale) {
           left: x, top: H * pct('tm-num-y'),
           originX:'center', originY:'center',
           fontSize: Math.round(W*0.21*pct('tm-num-size')),
-          fontFamily: numFont, fontWeight:'bold',
+          fontFamily: numFont, fontWeight:'normal',
           fill: numColor,
           charSpacing: parseInt(document.getElementById('tm-num-spacing').value) || 0,
         });
@@ -2288,6 +2288,8 @@ async function buildOrderPdf(onProgress) {
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   let first = true;
+  // DERBY watermark: one large, faint logo across the middle of every page
+  const wm = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = 'DERBYY.png'; });
   const newPage = () => {
     const c = document.createElement('canvas'); c.width = PW * Q; c.height = PH * Q;
     const x = c.getContext('2d');
@@ -2298,6 +2300,14 @@ async function buildOrderPdf(onProgress) {
     return { c, x };
   };
   const addPage = c => {
+    if (wm) {
+      const x = c.getContext('2d');
+      const ww = PW * 0.75, wh = wm.height * ww / wm.width;
+      x.save();
+      x.globalAlpha = 0.12;
+      x.drawImage(wm, (PW - ww) / 2, (PH - wh) / 2, ww, wh);   // context is already scaled by Q
+      x.restore();
+    }
     if (!first) pdf.addPage();
     first = false;
     pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
@@ -2371,8 +2381,8 @@ async function buildOrderPdf(onProgress) {
     const col = i % COLS, row = Math.floor(i % PER / COLS);
     const cx = M + col * (CW + 40), cy = M + row * (CH + 20);
     const k = Math.min(CW / crop.w, (CH - 44) / crop.h);
-    x.drawImage(img, crop.x * RS, crop.y * RS, crop.w * RS, crop.h * RS,
-                cx + (CW - crop.w * k) / 2, cy, crop.w * k, crop.h * k);
+    const dx = cx + (CW - crop.w * k) / 2, dw = crop.w * k, dh = crop.h * k;
+    x.drawImage(img, crop.x * RS, crop.y * RS, crop.w * RS, crop.h * RS, dx, cy, dw, dh);
     x.fillStyle = '#111'; x.font = font(24, 700); x.textAlign = 'center';
     x.fillText([p.num, p.name, p.size].filter(Boolean).join('  ·  '), cx + CW / 2, cy + CH - 12);
     x.textAlign = 'left';
