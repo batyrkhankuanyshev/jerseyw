@@ -82,6 +82,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-radius:4px;width:100%;height:30px;padding:2px 4px;background:var(--panel2);cursor:pointer}
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+.hexpick{display:flex;gap:4px}
+.hexpick input[type=color]{width:30px;flex:none}
+.hexpick .fi{flex:1;min-width:0;font-family:monospace;text-transform:uppercase}
 input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--border);border-radius:2px;outline:none;margin:4px 0}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--accent);border-radius:50%;cursor:pointer}
 .rr{display:flex;align-items:center;gap:8px}.rr input{flex:1}
@@ -495,9 +498,14 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
 <script>
 'use strict';
 
+// Run image filters on Canvas2D: the custom ColorOverlay below only has a
+// 2D implementation, and fabric's default WebGL backend would skip it.
+fabric.filterBackend = new fabric.Canvas2dFilterBackend();
+
 /* ── CUSTOM FILTER: ColorOverlay ─────────────────────
-   Blends each non-transparent pixel towards target color.
-   intensity=1 → fully replaces color (silhouette)
+   Works like Photoshop's "Color Overlay" layer style:
+   every pixel takes the target color, alpha is kept.
+   intensity=1 → solid color silhouette of the logo
    intensity=0 → original colors unchanged
 ─────────────────────────────────────────────────── */
 fabric.Image.filters.ColorOverlay = fabric.util.createClass(
@@ -521,14 +529,9 @@ fabric.Image.filters.ColorOverlay = fabric.util.createClass(
     const k  = Math.max(0,Math.min(1,this.intensity));
     const k1 = 1 - k;
     for (let i=0;i<d.length;i+=4) {
-      if (d[i+3] > 10) {
-        const lum = (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114) / 255;
-        // Remap luminance: dark→35% of color, white→100% — all parts stay visible
-        const scale = 0.35 + lum * 0.65;
-        d[i]   = Math.round(d[i]   * k1 + scale * tr * 255 * k);
-        d[i+1] = Math.round(d[i+1] * k1 + scale * tg * 255 * k);
-        d[i+2] = Math.round(d[i+2] * k1 + scale * tb * 255 * k);
-      }
+      d[i]   = Math.round(d[i]   * k1 + tr * 255 * k);
+      d[i+1] = Math.round(d[i+1] * k1 + tg * 255 * k);
+      d[i+2] = Math.round(d[i+2] * k1 + tb * 255 * k);
     }
   },
 
@@ -1042,6 +1045,10 @@ function layerUp()   { const o=S.canvas.getActiveObject(); if(o){S.canvas.bringF
 function layerDown() { const o=S.canvas.getActiveObject(); if(o){S.canvas.sendBackwards(o);S.canvas.requestRenderAll();updateLayers();} }
 
 /* ── EXPORT ──────────────────────────────────────── */
+function randomPngName() {
+  return Math.random().toString(36).slice(2,10).toUpperCase() + '.png';
+}
+
 function exportCanvas() {
   S.canvas.discardActiveObject();
   S.canvas.requestRenderAll();
@@ -1077,7 +1084,7 @@ function exportCanvas() {
       oc.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'derby-ftbl-jersey.png';
+        a.download = randomPngName();
         a.click();
         showToast(`Скачано (${scale}×) — ${oc.width}×${oc.height}px`);
       }, 'image/png');
@@ -1089,7 +1096,7 @@ function exportCanvas() {
     // No watermark found — export anyway but warn
     showToast('⚠ watermark.png не найден, скачано без знака');
     const a = document.createElement('a');
-    a.href = dataURL; a.download = 'derby-ftbl-jersey.png'; a.click();
+    a.href = dataURL; a.download = randomPngName(); a.click();
   };
 }
 
@@ -1363,6 +1370,45 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2600);
 }
+
+/* ── HEX COLOR FIELDS ────────────────────────────── */
+// Every color picker gets a HEX text field next to it. The picker stays the
+// source of truth, so existing code keeps reading/writing picker.value.
+function attachHexField(picker) {
+  const wrap = document.createElement('div');
+  wrap.className = 'hexpick';
+  picker.parentNode.insertBefore(wrap, picker);
+  wrap.appendChild(picker);
+
+  const hex = document.createElement('input');
+  hex.className = 'fi';
+  hex.maxLength = 7;
+  hex.spellcheck = false;
+  wrap.appendChild(hex);
+
+  const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  const show = () => { hex.value = desc.get.call(picker).toUpperCase(); };
+  // Mirror programmatic writes (e.g. selecting a layer fills the props panel)
+  Object.defineProperty(picker, 'value', {
+    get() { return desc.get.call(picker); },
+    set(v) { desc.set.call(picker, v); show(); },
+  });
+  picker.addEventListener('input', show);
+
+  // Short form (#F00) is only expanded on blur so it doesn't jump mid-typing
+  const apply = (allowShort) => {
+    let v = hex.value.trim().replace(/^#?/, '#');
+    if (allowShort && /^#[0-9a-f]{3}$/i.test(v)) v = '#' + v.slice(1).replace(/./g, c => c + c);
+    if (!/^#[0-9a-f]{6}$/i.test(v)) return;
+    desc.set.call(picker, v.toLowerCase());
+    picker.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  hex.addEventListener('input', () => apply(false));
+  hex.addEventListener('blur', () => { apply(true); show(); });
+  hex.addEventListener('keydown', e => { if (e.key === 'Enter') hex.blur(); });
+  show();
+}
+document.querySelectorAll('input[type=color]').forEach(attachHexField);
 </script>
 </body>
 </html>
