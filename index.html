@@ -88,6 +88,12 @@ input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
 .hexpick{display:flex;gap:4px}
+#tm-check .ck-head{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:4px;cursor:pointer}
+#tm-check .ck-list{margin-top:4px;max-height:180px;overflow-y:auto}
+#tm-check .ck-item{padding:4px 9px;border-left:2px solid;margin:2px 0;cursor:pointer;color:var(--dim);line-height:1.35}
+#tm-check .ck-item:hover{color:var(--text)}
+#tm-check .ck-err{border-color:var(--danger)} #tm-check .ck-warn{border-color:#e0a030}
+.fi.ck-bad-err{border-color:var(--danger)!important} .fi.ck-bad-warn{border-color:#e0a030!important}
 .fpick-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:5px 9px;cursor:pointer;font-size:14px;text-align:left;min-height:31px}
 .fpick-btn:hover{border-color:rgba(200,241,53,.4)}
 .fpick-btn span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -595,6 +601,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
         </div>
       </div>
       <div class="tm-roster" style="flex:1;overflow-y:auto;padding:8px 14px">
+        <div id="tm-check" style="font-size:11px;margin-bottom:8px"></div>
         <table style="width:100%;border-collapse:collapse">
           <thead>
             <tr style="border-bottom:1px solid var(--border2)">
@@ -2176,6 +2183,158 @@ function stepPreview(dir) {
   updatePreview();
 }
 
+/* ── ROSTER CHECK ──
+   Before printing: duplicate numbers, missing sizes, names that will be shrunk a lot,
+   likely typos, and characters that won't print — invisible/odd symbols, emoji,
+   mixed Latin/Cyrillic, and letters the chosen font doesn't have (Kazakh Қ, Ұ, Ә…). */
+const TM_INVISIBLE = /[\u00A0\u00AD\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF\t]/;
+const TM_EMOJI = /\p{Extended_Pictographic}/u;
+const tmGlyphCache = {};
+
+// A glyph the font lacks falls back to another font — so its width then depends on
+// which fallback we name. Same width with two different fallbacks → the font has it.
+function tmFontHas(font, ch) {
+  const key = font + '\u0000' + ch;
+  if (key in tmGlyphCache) return tmGlyphCache[key];
+  const ctx = (tmFontHas.c = tmFontHas.c || document.createElement('canvas').getContext('2d'));
+  ctx.font = `100px "${font}", monospace`; const a = ctx.measureText(ch).width;
+  ctx.font = `100px "${font}", serif`;     const b = ctx.measureText(ch).width;
+  return tmGlyphCache[key] = Math.abs(a - b) < 0.01;
+}
+function tmMissingChars(text, font) {
+  return [...new Set([...text])].filter(ch => ch.trim() && !TM_EMOJI.test(ch) && !tmFontHas(font, ch));
+}
+const tmShowChar = ch => /\s/.test(ch) || TM_INVISIBLE.test(ch) ? `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}` : `«${ch}»`;
+
+function tmCheckRoster() {
+  const issues = [];   // { level: 'err'|'warn', row, field, msg, fix? }
+  const add = (level, row, field, msg, fix) => issues.push({ level, row, field, msg, fix });
+  const numFont  = document.getElementById('tm-num-font').value;
+  const nameFont = document.getElementById('tm-name-font').value || numFont;
+  const W = S.canvas.width;
+  const pct = id => parseFloat(document.getElementById(id).value) / 100;
+  const seen = {};
+
+  TB.players.forEach((p, i) => {
+    const name = (p.name || ''), num = String(p.num || ''), size = (p.size || '');
+    if (!name.trim() && !num.trim()) return;   // empty row, skipped on export
+    const who = name.trim() || `#${num}`;
+
+    // Characters
+    [['name', name], ['num', num], ['size', size]].forEach(([field, v]) => {
+      if (TM_INVISIBLE.test(v) || /\s{2,}/.test(v) || v !== v.trim())
+        add('warn', i, field, `${who}: лишние или невидимые пробелы/символы`, 'clean');
+      if (TM_EMOJI.test(v)) add('err', i, field, `${who}: эмодзи не напечатается`);
+    });
+    if (/[A-Z]/i.test(name) && /[А-ЯЁӘҒҚҢӨҰҮҺІ]/i.test(name))
+      add('err', i, 'name', `${who}: смешаны латиница и кириллица — некоторые буквы только выглядят одинаково`);
+    const missN = tmMissingChars(name.toUpperCase(), nameFont);
+    if (missN.length) add('err', i, 'name', `${who}: в шрифте имени нет ${missN.map(tmShowChar).join(' ')} — напечатается другим шрифтом`);
+    const missD = tmMissingChars(num, numFont);
+    if (missD.length) add('err', i, 'num', `${who}: в шрифте номера нет ${missD.map(tmShowChar).join(' ')}`);
+
+    // Number
+    if (num && !/^\d+$/.test(num.trim())) add('err', i, 'num', `${who}: в номере не только цифры («${num}»)`);
+    else if (num.trim().length > 2) add('warn', i, 'num', `${who}: трёхзначный номер ${num}`);
+    if (num.trim()) {
+      const k = String(parseInt(num, 10));   // 7 and 07 are the same number on the pitch
+      (seen[k] = seen[k] || []).push(i);
+    }
+
+    // Size
+    if (!size.trim()) add('warn', i, 'size', `${who}: не указан размер`);
+    else if (!TM_SIZE_ORDER.includes(size.trim())) add('warn', i, 'size', `${who}: нестандартный размер «${size}»`);
+
+    // Name
+    if (!name.trim()) add('warn', i, 'name', `#${num}: без имени`);
+    if (/(.)\1\1/i.test(name) || /([^AEIOUYАЕЁИОУЫЭЮЯ\s])\1$/i.test(name.trim()))
+      add('warn', i, 'name', `${who}: возможно опечатка (повтор букв)`);
+    if (name.trim() && TB.maxNameW) {
+      const t = new fabric.Text(name.toUpperCase(), { fontSize: Math.round(W*0.062*pct('tm-name-size')), fontFamily: nameFont,
+        charSpacing: parseInt(document.getElementById('tm-name-spacing').value) || 0 });
+      const k = TB.maxNameW / t.width;
+      if (k < 0.7) add('warn', i, 'name', `${who}: длинное имя — будет уменьшено до ${Math.round(k * 100)}%`);
+    }
+  });
+
+  Object.entries(seen).forEach(([n, rows]) => {
+    if (rows.length < 2) return;
+    const names = rows.map(r => TB.players[r].name || '—').join(', ');
+    rows.forEach(r => add('err', r, 'num', `Номер ${n} у нескольких игроков: ${names}`));
+  });
+
+  // Kit texts on the design (sponsor, back slogan, sleeves) must print too
+  S.canvas.getObjects().filter(o => o.type === 'text' || o.type === 'i-text').forEach(o => {
+    const fonts = new Set([o.fontFamily]);
+    Object.values(o.styles || {}).forEach(line => Object.values(line).forEach(st => st.fontFamily && fonts.add(st.fontFamily)));
+    const miss = [...fonts].flatMap(f => tmMissingChars(o.text.replace(/\n/g, ''), f));
+    if (miss.length) add('err', -1, null, `Надпись «${o.text.replace(/\n/g, ' ')}»: в шрифте нет ${[...new Set(miss)].map(tmShowChar).join(' ')}`);
+  });
+
+  // One line per message (duplicates listed once)
+  const uniq = []; const keys = new Set();
+  issues.forEach(x => { const k = x.msg; if (!keys.has(k)) { keys.add(k); uniq.push(x); } });
+  return { issues, list: uniq };
+}
+
+function tmRunCheck() {
+  const box = document.getElementById('tm-check');
+  if (!box) return;
+  const { issues, list } = tmCheckRoster();
+  TB.check = { issues, list };
+  const errs = list.filter(x => x.level === 'err').length, warns = list.length - errs;
+
+  // Highlight the offending inputs
+  const rows = document.querySelectorAll('#tm-rows tr');
+  rows.forEach(tr => tr.querySelectorAll('input').forEach(inp => inp.classList.remove('ck-bad-err', 'ck-bad-warn')));
+  issues.forEach(x => {
+    if (x.row < 0 || !rows[x.row]) return;
+    const idx = { num: 0, name: 1, size: 2 }[x.field];
+    const inp = rows[x.row].querySelectorAll('input')[idx];
+    if (inp && !inp.classList.contains('ck-bad-err')) inp.classList.add(x.level === 'err' ? 'ck-bad-err' : 'ck-bad-warn');
+  });
+
+  if (!list.length) {
+    box.innerHTML = `<div class="ck-head" style="background:rgba(200,241,53,.08);color:var(--accent);cursor:default">✅ Состав проверен — проблем нет</div>`;
+    return;
+  }
+  const open = TB.checkOpen !== false;
+  const canClean = issues.some(x => x.fix === 'clean');
+  box.innerHTML = `
+    <div class="ck-head" style="background:${errs ? 'rgba(224,82,82,.12)' : 'rgba(224,160,48,.12)'};color:${errs ? 'var(--danger)' : '#e0a030'}"
+      onclick="TB.checkOpen=${!open};tmRunCheck()">
+      ${errs ? '⛔' : '⚠️'} <b>${errs ? `${errs} ошиб${errs === 1 ? 'ка' : errs < 5 ? 'ки' : 'ок'}` : ''}${errs && warns ? ', ' : ''}${warns ? `${warns} предупрежд${warns === 1 ? 'ение' : warns < 5 ? 'ения' : 'ений'}` : ''}</b>
+      <span style="margin-left:auto;color:var(--muted)">${open ? '▾' : '▸'}</span>
+    </div>
+    ${open ? `<div class="ck-list">${list.map(x => `<div class="ck-item ck-${x.level}" onclick="tmFocusRow(${x.row}, '${x.field}')">${esc(x.msg)}</div>`).join('')}</div>
+      ${canClean ? `<button class="btn btn-panel" style="margin-top:6px" onclick="tmCleanRoster()">🧹 Убрать лишние пробелы и невидимые символы</button>` : ''}` : ''}`;
+}
+
+function tmFocusRow(row, field) {
+  if (row < 0) return;
+  const tr = document.querySelectorAll('#tm-rows tr')[row];
+  if (!tr) return;
+  const inp = tr.querySelectorAll('input')[{ num: 0, name: 1, size: 2 }[field] ?? 1];
+  tr.scrollIntoView({ block: 'center' });
+  inp && inp.focus();
+}
+
+function tmCleanRoster() {
+  const clean = v => String(v || '').replace(new RegExp(TM_INVISIBLE.source, 'g'), ' ').replace(/\s+/g, ' ').trim();
+  TB.players.forEach(p => { p.name = clean(p.name); p.num = clean(p.num); p.size = clean(p.size).toUpperCase(); });
+  renderRoster();
+  updatePreview();
+  showToast('🧹 Состав очищен');
+}
+
+// Before export: errors need an explicit OK
+function tmConfirmCheck() {
+  tmRunCheck();
+  const errs = (TB.check?.list || []).filter(x => x.level === 'err');
+  if (!errs.length) return true;
+  return confirm(`В составе ${errs.length} ошиб. — например:\n\n• ${errs.slice(0, 5).map(x => x.msg).join('\n• ')}\n\nВсё равно скачать?`);
+}
+
 // Full-size look at the preview: fine details (inline outlines in club fonts) are
 // too small to see in the thumbnail. Scroll/pan, click or Esc to close.
 function tmZoomPreview() {
@@ -2200,6 +2359,7 @@ function schedulePreview() {
 }
 
 function updatePreview() {
+  tmRunCheck();
   if (!tmBaseURL) return;
   const n = TB.players.length;
   if (TB.previewIdx >= n) TB.previewIdx = Math.max(0, n - 1);
@@ -2294,6 +2454,7 @@ function renderPlayerCanvas(player, baseURL, scale) {
 async function generateTeamZip() {
   const valid = TB.players.filter(p => p.num || p.name);
   if (!valid.length) { showToast('Add players first'); return; }
+  if (!tmConfirmCheck()) return;
 
   const btn  = document.getElementById('tm-gen-btn');
   const prog = document.getElementById('tm-progress');
@@ -2458,6 +2619,7 @@ async function buildOrderPdf(onProgress) {
 }
 
 async function downloadOrderPdf() {
+  if (!tmConfirmCheck()) return;
   const btn  = document.getElementById('tm-pdf-btn');
   const prog = document.getElementById('tm-progress');
   btn.disabled = true; prog.style.display = '';
