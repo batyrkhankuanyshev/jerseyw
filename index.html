@@ -287,6 +287,12 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     </label>
     <input type="file" id="file-badge" accept="image/*" onchange="addBadge(event)">
     <button class="btn btn-panel" style="margin-top:6px" onclick="openLogoGallery()">🏆 Пресеты логотипов</button>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <input class="fi" id="sleeve-text" value="MEZUNS’27" spellcheck="false" style="flex:1;min-width:0;text-transform:uppercase"
+        title="Делится между передом и спиной рукава. Своё место разделения — через | , например MEZU|NS’27"
+        onkeydown="if(event.key==='Enter')addSleeveText()">
+      <button class="btn btn-panel" style="width:auto;margin:0" onclick="addSleeveText()">👕 На рукав</button>
+    </div>
     <button class="btn btn-panel" style="margin-top:6px" onclick="addKitTexts()" title="SARAISHYQ BILIM на груди и MEZUNS’27 на спине — можно изменить текст">🏷 Спонсор + надпись на спине</button>
     <label for="file-sponsor" class="uz" style="margin-top:8px">
       <div class="ico">🤝</div>
@@ -1572,9 +1578,11 @@ function tmReadability(rect, rgb) {
 // Colour for an auto-placed item covering `rect`: club colour, then the kit's other
 // colour, then white/black — the first one that reads on almost all of the area.
 // If none does (e.g. striped shirts), white on a black plate.
-function tmChooseColor(rect, other) {
+// Several rects (pieces of one item, e.g. both sleeve halves) get one shared colour.
+function tmChooseColor(rects, other) {
+  rects = [].concat(rects);
   const cands = [S.kitTextColor, tmRgbToHex(other), '#ffffff', '#111111'].filter(Boolean);
-  const hit = cands.find(c => tmReadability(rect, tmHexToRgb(c)) >= 0.85);
+  const hit = cands.find(c => rects.every(r => tmReadability(r, tmHexToRgb(c)) >= 0.85));
   return hit ? { color: hit, plate: null } : { color: '#ffffff', plate: '#111111' };
 }
 
@@ -1583,6 +1591,59 @@ function tmChooseColor(rect, other) {
 function tmLogoColor(area, other) {
   if (tmContrast(other, area) >= 2.5) return tmRgbToHex(other);
   return tmContrast([255,255,255], area) >= tmContrast([17,17,17], area) ? '#ffffff' : '#111111';
+}
+
+// Sleeve text wraps around one sleeve: the first half shows on the front view
+// (viewer's right sleeve), the rest on the back view (viewer's left sleeve).
+// Spots and tilt measured on a real printed kit, in units of the kit geometry.
+const SLEEVE_SPOTS = [
+  { side: 'front', x:  0.70,  y: 0.70, angle: -7 },
+  { side: 'back',  x: -0.725, y: 0.77, angle: 12 },
+];
+
+function addSleeveText() {
+  if (!S.jerseyImg) { showToast('Сначала выберите форму'); return; }
+  const raw = document.getElementById('sleeve-text').value.trim().toUpperCase();
+  if (!raw) return;
+  const cut = raw.includes('|') ? raw.indexOf('|') : Math.floor(raw.length / 2);
+  const parts = [raw.slice(0, cut), raw.slice(cut).replace('|', '')].map(t => t.trim());
+  const kits = { front: tmDetectKit('front'), back: tmDetectKit('back') };
+  if (!kits.front || !kits.back) { showToast('Не удалось найти форму на изображении'); return; }
+  const fonts = [...document.getElementById('prop-font').options].map(o => o.value);
+  const numFont = document.getElementById('tm-num-font').value || TM_DEFAULT_FONT;
+  // Front and back are the same mockup, so size them from the piece that was measured
+  // more cleanly: a white-on-white piece loses its sleeves and comes out too wide.
+  const ref = kits.front.torsoW <= kits.back.torsoW ? kits.front : kits.back;
+  const { top, D, torsoW } = ref;
+  const objs = SLEEVE_SPOTS.map((spot, i) => {
+    if (!parts[i]) return null;
+    const kit = kits[spot.side];
+    const pad = torsoW * 0.12;   // and keep it on this piece's own sleeve
+    const x = Math.min(kit.pieceR - pad, Math.max(kit.pieceL + pad, kit.cx + spot.x * torsoW));
+    const obj = new fabric.Text(parts[i], {
+      left: x, top: top + spot.y * D,
+      originX: 'center', originY: 'center',
+      fontSize: Math.round(0.087 * D / 0.72),
+      fontFamily: fonts.includes(numFont) ? numFont : 'Inter', fontWeight: 'bold', charSpacing: 20,
+    });
+    const maxW = torsoW * 0.32;   // stay on the sleeve
+    if (obj.width > maxW) obj.scale(maxW / obj.width);
+    return { obj, angle: spot.angle };
+  }).filter(Boolean);
+  // One colour for both halves: it's one word on one sleeve
+  const legs = ref.shortsAt(ref.hem - 0.27 * D);
+  const shortsC = tmCleanColor(tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), ref.hem - 0.27 * D, 0.1 * D));
+  const { color, plate } = tmChooseColor(objs.map(o => o.obj.getBoundingRect(true, true)), shortsC);
+  objs.forEach(({ obj, angle }) => {
+    obj.set({ fill: color, plate, angle });
+    obj.tmKeep = true;
+    tmFitPlate(obj);
+    S.meta.set(obj, { id: ++lc, type: 'text', name: `Рукав: ${obj.text}` });
+    S.canvas.add(obj);
+  });
+  S.canvas.requestRenderAll();
+  updateLayers();
+  showToast(`На рукав: ${parts.filter(Boolean).join(' · ')}`);
 }
 
 // Colour for the circle behind a see-through badge: it sits inside the badge ring,
@@ -1927,7 +1988,8 @@ function tmDetectKit(side = 'back') {
     return { l: l / k, r: r / k };
   };
 
-  return { cx: cx / k, top: top / k, D: D / k, torsoW: tw / k, hem: hem / k, shirt, shortsAt };
+  return { cx: cx / k, top: top / k, D: D / k, torsoW: tw / k, hem: hem / k, shirt, shortsAt,
+           pieceL: x0 / k, pieceR: x1 / k };   // horizontal extent of this kit piece
 }
 
 // WCAG contrast between two [r,g,b]
