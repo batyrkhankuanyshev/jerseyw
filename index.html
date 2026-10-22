@@ -413,6 +413,10 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
             </div>
           </div>
         </div>
+        <div class="fg" id="badge-fill-row" style="display:none;margin-top:8px">
+          <label>Фон эмблемы</label>
+          <input type="color" id="prop-badge-fill" value="#5b2ca0" oninput="updateBadgeFill()">
+        </div>
       </div>
     </div>
 
@@ -1097,7 +1101,8 @@ function syncProps() {
 
   const isText = obj.type==='text' || obj.type==='i-text';
   document.getElementById('text-props').style.display = isText ? '' : 'none';
-  document.getElementById('img-props').style.display  = (!isText && obj.type==='image') ? '' : 'none';
+  const img = logoImageOf(obj);
+  document.getElementById('img-props').style.display  = (!isText && img) ? '' : 'none';
 
   if (isText) {
     document.getElementById('prop-text').value      = obj.text   || '';
@@ -1113,9 +1118,12 @@ function syncProps() {
     document.getElementById('prop-spacing-val').textContent = cs;
   }
 
-  if (!isText && obj.type==='image') {
+  if (!isText && img) {
+    const circle = badgeCircleOf(obj);
+    document.getElementById('badge-fill-row').style.display = circle ? '' : 'none';
+    if (circle) document.getElementById('prop-badge-fill').value = circle.fill;
     // detect existing tint filter
-    const tintF = obj.filters && obj.filters.find(f => f.type==='ColorOverlay');
+    const tintF = img.filters && img.filters.find(f => f.type==='ColorOverlay');
     const tintOn = !!tintF;
     document.getElementById('prop-tint-on').checked    = tintOn;
     document.getElementById('tint-controls').style.display = tintOn ? '' : 'none';
@@ -1172,9 +1180,30 @@ function updateProp(prop) {
 }
 
 /* ── IMAGE COLOR TINTING ─────────────────────────── */
-function updateTint() {
+// A logo layer is either an image or a badge group (backing circle + image)
+function logoImageOf(obj) {
+  if (!obj) return null;
+  if (obj.type === 'image') return obj;
+  if (obj.type === 'group') return obj.getObjects().find(o => o.type === 'image') || null;
+  return null;
+}
+function badgeCircleOf(obj) {
+  return obj && obj.type === 'group' ? obj.getObjects().find(o => o.type === 'circle') || null : null;
+}
+
+function updateBadgeFill() {
   const obj = S.canvas.getActiveObject();
-  if (!obj || obj.type!=='image') return;
+  const circle = badgeCircleOf(obj);
+  if (!circle) return;
+  circle.set('fill', document.getElementById('prop-badge-fill').value);
+  obj.dirty = true;
+  S.canvas.requestRenderAll();
+}
+
+function updateTint() {
+  const group = S.canvas.getActiveObject();
+  const obj = logoImageOf(group);
+  if (!obj) return;
 
   const on  = document.getElementById('prop-tint-on').checked;
   const col = document.getElementById('prop-tint-color').value;
@@ -1194,6 +1223,7 @@ function updateTint() {
   }
 
   obj.applyFilters();
+  group.dirty = true;   // badge groups cache their rendering
   S.canvas.requestRenderAll();
 }
 
@@ -1397,6 +1427,16 @@ function tmLogoColor(area, other) {
   return tmContrast([255,255,255], area) >= tmContrast([17,17,17], area) ? '#ffffff' : '#111111';
 }
 
+// Colour for the circle behind a see-through badge: must differ from both the
+// garment and the logo. Prefer the kit's other colour, else a shade of the garment.
+function tmBadgeFill(area, logoHex, other) {
+  const logo = tmHexToRgb(logoHex);
+  const shade = (c, k) => c.map(v => k < 0 ? v * (1 + k) : v + (255 - v) * k);
+  const cands = [other, shade(area, -0.45), shade(area, 0.45), shade(area, -0.7)];
+  const ok = c => tmContrast(c, logo) >= 2 && tmContrast(c, area) >= 1.3;
+  return tmRgbToHex(cands.find(ok) || shade(area, -0.45));
+}
+
 function placeLogoOnKit(logo, kit) {
   const { cx, top, D, torsoW, hem, shortsAt } = kit;
   const shortsY = hem - 0.27 * D;
@@ -1416,13 +1456,26 @@ function placeLogoOnKit(logo, kit) {
         x = cx + pl.x * torsoW;
         color = tmLogoColor(shirtC, shortsC);
       }
-      img.scaleToHeight(pl.size * D);
-      img.set({ left: x, top: y, originX:'center', originY:'center' });
       img.filters = [new fabric.Image.filters.ColorOverlay({ color, intensity: 1 })];
       img.applyFilters();
+      let layer = img;
+      if (logo.badgeFill) {
+        // Fill the see-through parts (the dove) with a third colour so the badge stands out
+        const area = pl.area === 'shorts' ? shortsC : shirtC;
+        const other = pl.area === 'shorts' ? shirtC : shortsC;
+        const circle = new fabric.Circle({
+          radius: Math.min(img.width, img.height) * 0.48,
+          fill: tmBadgeFill(area, color, other),
+          originX: 'center', originY: 'center', left: 0, top: 0,
+        });
+        img.set({ originX: 'center', originY: 'center', left: 0, top: 0 });
+        layer = new fabric.Group([circle, img], { originX: 'center', originY: 'center' });
+      }
+      layer.scaleToHeight(pl.size * D);
+      layer.set({ left: x, top: y, originX:'center', originY:'center' });
       const id = ++lc;
-      S.meta.set(img, { id, type:'image', name: `Лого: ${logo.name} (${LOGO_AREA_NAMES[pl.area] || pl.area})` });
-      S.canvas.add(img);
+      S.meta.set(layer, { id, type:'image', name: `Лого: ${logo.name} (${LOGO_AREA_NAMES[pl.area] || pl.area})` });
+      S.canvas.add(layer);
       S.canvas.requestRenderAll();
       updateLayers();
     }, { crossOrigin: 'anonymous' });
@@ -1734,10 +1787,10 @@ function tmDesignColors() {
   S.canvas.getObjects().filter(o => o.selectable !== false).forEach(o => {
     if ((o.type === 'text' || o.type === 'i-text') && /^#[0-9a-f]{6}$/i.test(o.fill || '')) {
       out.push(tmHexToRgb(o.fill));
-    } else if (o.type === 'image') {
+    } else if (logoImageOf(o)) {
       const c = document.createElement('canvas'); c.width = c.height = 48;
       const x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(o.getElement(), 0, 0, 48, 48);
+      x.drawImage(logoImageOf(o).getElement(), 0, 0, 48, 48);
       let d; try { d = x.getImageData(0, 0, 48, 48).data; } catch (e) { return; }
       // Bucket saturated pixels by hue, average the biggest bucket
       const bins = {};
