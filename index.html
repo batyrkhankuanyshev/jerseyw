@@ -507,6 +507,28 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
   <div id="cloud-body" style="flex:1;overflow-y:auto;padding:20px"></div>
 </div>
 
+<!-- ══ INVOICE (EXCEL) FORM ════════════════════════════ -->
+<div id="inv-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:250;display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;width:min(560px,100%);max-height:100%;overflow-y:auto">
+    <div style="display:flex;align-items:center;margin-bottom:12px">
+      <h3 style="font-size:15px;margin-right:auto">📊 Proforma Invoice (Excel)</h3>
+      <button class="btn btn-ghost" onclick="closeInvoiceForm()">✕</button>
+    </div>
+    <div class="fr"><div class="fg"><label>Клиент / Customer</label><input class="fi" id="inv-customer"></div>
+                    <div class="fg"><label>Номер заказа / NO.</label><input class="fi" id="inv-no"></div></div>
+    <div class="fg"><label>Модель / Style Name</label><input class="fi" id="inv-style"></div>
+    <div class="fg"><label>Название позиции / Item</label><textarea class="fi" id="inv-item" rows="2" style="resize:vertical"></textarea></div>
+    <div class="fr"><div class="fg"><label>Цена за шт., ¥</label><input class="fi" id="inv-price" type="number" min="0" step="0.5"></div>
+                    <div class="fg"><label>Доставка, ¥</label><input class="fi" id="inv-ship" type="number" min="0" step="1"></div></div>
+    <div class="fr"><div class="fg"><label>Дата заказа</label><input class="fi" id="inv-date" type="date"></div>
+                    <div class="fg"><label>Крайний срок поставки</label><input class="fi" id="inv-deliver" type="date"></div></div>
+    <div class="fg"><label>Адрес / Address</label><input class="fi" id="inv-address"></div>
+    <div class="fg"><label>Примечание / 备注</label><textarea class="fi" id="inv-note" rows="2" style="resize:vertical"></textarea></div>
+    <div id="inv-summary" style="font-size:12px;color:var(--dim);margin:6px 0 12px"></div>
+    <button class="btn btn-primary" style="width:100%;padding:10px" id="inv-go" onclick="downloadInvoiceXlsx()">⬇ Скачать Excel</button>
+  </div>
+</div>
+
 <!-- ══ TEAM BUILDER MODAL ══════════════════════════════ -->
 <div id="team-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:none;flex-direction:column">
   <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0">
@@ -641,6 +663,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="tm-gen-btn" class="btn btn-primary" style="font-size:13px;padding:10px 28px" onclick="generateTeamZip()">⬇ Download ZIP</button>
         <button id="tm-pdf-btn" class="btn btn-panel" style="font-size:13px;padding:10px 18px" onclick="downloadOrderPdf()">📄 Order sheet PDF</button>
+        <button id="tm-xls-btn" class="btn btn-panel" style="font-size:13px;padding:10px 18px" onclick="openInvoiceForm()">📊 Invoice Excel</button>
       </div>
     </div>
   </div>
@@ -975,6 +998,7 @@ function applyGalleryJersey(jersey) {
   closeGallery();
   // The club's name/number print colour, used as the default for new text
   S.kitTextColor = jersey.textColor ? jersey.textColor.toLowerCase() : null;
+  S.galleryJersey = jersey;   // for naming the item on the supplier invoice
   const url = `jerseys/${jersey.file}`;
   fabric.Image.fromURL(url, img => {
     if (!img) { showToast('Не удалось загрузить изображение'); return; }
@@ -990,6 +1014,7 @@ function applyGalleryJersey(jersey) {
 function loadJersey(e) {
   const file = e.target.files[0]; if (!file) return;
   S.kitTextColor = null;
+  S.galleryJersey = null;
   const url = URL.createObjectURL(file);
   fabric.Image.fromURL(url, img => {
     const maxW=720, maxH=860;
@@ -1813,7 +1838,8 @@ function applyLogoPreset(logo) {
 const TB = { players: [], autoFor: null, maxNameW: 0, maxNumW: 0, previewIdx: 0, xManual: false };
 const TM_DEFAULT_FONT = 'Arsenal2425';
 const TM_PREVIEW_SCALE = 2;
-const TM_SIZE_ORDER = ['XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];
+const TM_KID_SIZES  = ['16','18','20','22','24','26','28','30','32'];   // children's sizes (Chinese suppliers)
+const TM_SIZE_ORDER = [...TM_KID_SIZES, 'XXS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','4XL','5XL'];
 let tmBaseURL = null;
 let previewTimer = null;
 
@@ -2149,14 +2175,22 @@ function toggleImport(show) {
 }
 
 // Each line: name, number and size in any order, e.g. "MALIK 17 XS" or "17, Malik, XS"
+// Each line: name, number and size in any order — "MALIK 17 XS", "17, Malik, XS",
+// "Alinur - 9 - 22", "Zhalel-17-M". The first number is the shirt number; a
+// second one from 16–32 is a children's size.
 function parseRosterText(text) {
   const sizeRe = /^(XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL)$/i;
   return text.split(/\r?\n/).map(line => {
     let num = '', size = '';
     const rest = [];
-    line.trim().split(/[\s,;]+/).filter(Boolean).forEach(t => {
+    // Dashes next to a number or a size are separators; "Abdul-Aziz" keeps its hyphen
+    const parts = line.trim()
+      .replace(/\s*[-–—]\s*(?=\d|(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL)\b)/gi, ' ')
+      .replace(/(\d)\s*[-–—]\s*/g, '$1 ')
+      .split(/[\s,;]+/).filter(t => t && !/^[-–—]+$/.test(t));
+    parts.forEach(t => {
       if (!num && /^\d{1,3}$/.test(t)) num = t;          // keeps "06" as written
-      else if (!size && sizeRe.test(t)) size = t.toUpperCase();
+      else if (!size && (sizeRe.test(t) || (num && TM_KID_SIZES.includes(t)))) size = t.toUpperCase();
       else rest.push(t);
     });
     return { num, name: rest.join(' ').toUpperCase(), size };
@@ -2815,6 +2849,185 @@ async function cloudDelete(id) {
   loadCloudList();
 }
 
+/* ── PROFORMA INVOICE (Excel) ────────────────────── */
+// Same layout as the supplier's invoice: header, one item row with the kit picture,
+// size breakdown ("5*24 size", "8*S"), qty, price, amount and a red
+// "Name - Number - Size" list, then totals, shipping and dates.
+const INV_FIELDS = ['customer','no','style','price','ship','address','note'];
+const INV_DEFAULTS = { style: '球衣 football jersey', price: '48', ship: '0',
+  note: '尽快出货，出货前带有唛头的一面拍照发给业务' };
+const INV_CLUBS = {   // gallery file prefix → [Chinese, English]
+  'barcelona': ['巴萨','Barcelona'], 'real-madrid': ['皇马','Real Madrid'], 'man-utd': ['曼联','Man United'],
+  'arsenal': ['阿森纳','Arsenal'], 'inter-milan': ['国米','Inter'], 'juventus': ['尤文','Juventus'],
+  'dortmund': ['多特','Dortmund'], 'psg': ['巴黎','PSG'], 'chelsea': ['切尔西','Chelsea'], 'liverpool': ['利物浦','Liverpool'],
+  'man-city': ['曼城','Man City'], 'bayern': ['拜仁','Bayern'], 'ac-milan': ['AC','AC Milan'], 'atletico-madrid': ['马竞','Atletico'],
+  'tottenham': ['热刺','Tottenham'], 'ajax': ['阿贾克斯','Ajax'], 'inter-miami': ['迈阿密','Inter Miami'], 'portugal': ['葡萄牙','Portugal'],
+};
+const INV_TYPES = { home: ['主场','Home'], away: ['客场','Away'], third: ['二客','Third'], special: ['特别版','Special'] };
+
+function invItemName() {
+  const j = S.galleryJersey;
+  if (!j) return 'Custom jersey';
+  const f = j.file.replace(/\.[a-z]+$/, '');
+  const club = Object.keys(INV_CLUBS).sort((a, b) => b.length - a.length).find(k => f.startsWith(k));
+  const type = Object.keys(INV_TYPES).find(t => f.includes('-' + t));
+  const yy = (f.match(/(\d{2})(\d{2})$/) || []);
+  const season = yy[1] ? `${yy[1]}/${yy[2]}` : '';
+  if (!club) return j.name;
+  return `${season}${INV_CLUBS[club][0]}${type ? INV_TYPES[type][0] : ''}\n${INV_CLUBS[club][1]} ${type ? INV_TYPES[type][1] : ''} ${season}`.trim();
+}
+
+const invPlayers = () => [...TB.players.filter(p => p.num || p.name)]
+  .sort((a, b) => tmSizeRank(a.size) - tmSizeRank(b.size) || (parseInt(a.num) || 0) - (parseInt(b.num) || 0));
+
+function invSizeLines(players) {
+  const counts = {};
+  players.forEach(p => { const k = p.size || '?'; counts[k] = (counts[k] || 0) + 1; });
+  return Object.keys(counts).sort((a, b) => tmSizeRank(a) - tmSizeRank(b))
+    .map(k => TM_KID_SIZES.includes(k) ? `${counts[k]}*${k} size` : `${counts[k]}*${k}`);
+}
+
+function openInvoiceForm() {
+  const players = invPlayers();
+  if (!players.length) { showToast('Add players first'); return; }
+  if (!tmConfirmCheck()) return;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('invoice-fields')) || {}; } catch (e) {}
+  INV_FIELDS.forEach(k => document.getElementById('inv-' + k).value = saved[k] ?? INV_DEFAULTS[k] ?? '');
+  const today = new Date(), later = new Date(Date.now() + 7 * 864e5);
+  const iso = d => d.toISOString().slice(0, 10);
+  document.getElementById('inv-date').value = iso(today);
+  document.getElementById('inv-deliver').value = iso(later);
+  document.getElementById('inv-item').value = invItemName();
+  document.getElementById('inv-summary').textContent = `${players.length} шт. · ${invSizeLines(players).join(', ')}`;
+  document.getElementById('inv-modal').style.display = 'flex';
+}
+function closeInvoiceForm() { document.getElementById('inv-modal').style.display = 'none'; }
+
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+    sc.onload = res; sc.onerror = () => rej(new Error('Не удалось загрузить ExcelJS'));
+    document.head.appendChild(sc);
+  });
+}
+
+async function downloadInvoiceXlsx() {
+  const btn = document.getElementById('inv-go');
+  const v = id => document.getElementById('inv-' + id).value.trim();
+  const fields = Object.fromEntries(INV_FIELDS.map(k => [k, v(k)]));
+  try { localStorage.setItem('invoice-fields', JSON.stringify(fields)); } catch (e) {}
+  btn.disabled = true; btn.textContent = 'Готовлю файл…';
+  try {
+    await loadExcelJS();
+    const players = invPlayers();
+    const price = parseFloat(fields.price) || 0, ship = parseFloat(fields.ship) || 0;
+    const date = s => s ? new Date(s + 'T00:00:00Z') : null;   // Excel dates have no time zone
+
+    // Picture: first player's kit, cropped to shirts + shorts
+    const RS = 2, W = S.canvas.width, H = S.canvas.height;
+    const kit = await new Promise(r => { const im = new Image(); im.onload = () => r(im);
+      renderPlayerCanvas(players[0], getBaseDataURL(RS), RS).then(u => im.src = u); });
+    let crop = { x: 0, y: 0, w: W, h: H };
+    const fk = tmDetectKit('front'), bk = tmDetectKit('back');
+    if (fk && bk) {
+      const pad = fk.D * 0.12;
+      const x0 = Math.max(0, Math.min(fk.pieceL, bk.pieceL) - pad), x1 = Math.min(W, Math.max(fk.pieceR, bk.pieceR) + pad);
+      const y0 = Math.max(0, Math.min(fk.top, bk.top) - pad),       y1 = Math.min(H, Math.max(fk.hem, bk.hem) + pad);
+      crop = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    const pc = document.createElement('canvas');
+    pc.width = Math.round(crop.w * RS); pc.height = Math.round(crop.h * RS);
+    const px = pc.getContext('2d');
+    px.fillStyle = '#fff'; px.fillRect(0, 0, pc.width, pc.height);
+    px.drawImage(kit, crop.x * RS, crop.y * RS, crop.w * RS, crop.h * RS, 0, 0, pc.width, pc.height);
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('客单');
+    ws.columns = [4, 10.3, 29.2, 6, 15.5, 6.8, 12.7, 13.7, 24].map(width => ({ width }));
+    const yuan = '"￥"#,##0.00;"￥"\\-#,##0.00';
+    const base = { name: 'Arial', size: 14 };
+    const center = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    const thin = { style: 'thin', color: { argb: 'FF000000' } };
+    const box = { top: thin, left: thin, bottom: thin, right: thin };
+    const set = (addr, value, extra = {}) => {
+      const c = ws.getCell(addr);
+      c.value = value; c.font = { ...base, ...(extra.font || {}) }; c.alignment = { ...center, ...(extra.alignment || {}) };
+      if (extra.numFmt) c.numFmt = extra.numFmt;
+      if (extra.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: extra.fill } };
+      return c;
+    };
+
+    ws.mergeCells('A1:I1'); set('A1', 'Proforma Invoice', { font: { name: 'SimSun', size: 12 } });
+    ws.mergeCells('A2:B2'); set('A2', '客户/CUSTOMER：'); ws.mergeCells('C2:G2'); set('C2', fields.customer);
+    set('H2', '订单号/NO.:'); set('I2', fields.no);
+    ws.mergeCells('A3:B3'); set('A3', '款名/Style Name：'); ws.mergeCells('C3:G3'); set('C3', fields.style);
+    set('H3', 'Date/日期:'); set('I3', date(v('date')), { numFmt: 'm/d/yyyy' });
+    ws.getRow(1).height = 30; ws.getRow(2).height = 33; ws.getRow(3).height = 51.75; ws.getRow(4).height = 58.5;
+
+    const heads = ['NO', 'Item.&No /名称', '图片/photo', 'Unit /单位', 'Size/尺码', 'QTY /数量', 'Unit Price(RMB) /单价', 'Amount(S) /总计/RMB', 'Remarks/备注'];
+    heads.forEach((h, i) => set(String.fromCharCode(65 + i) + '4', h, { fill: 'FFFDE9D9' }));
+
+    const remarks = players.map(p => `${p.name || '—'} - ${p.num || '—'} - ${p.size || '—'}`);
+    const sizes = invSizeLines(players);
+    const lines = Math.max(remarks.length, sizes.length * 2.2);
+    const rowH = Math.max(200, Math.min(409, lines * 13 + 24));   // Excel caps rows at 409 pt
+    ws.getRow(5).height = rowH;
+    set('A5', 1); set('B5', v('item')); set('D5', 'PCS');
+    set('E5', sizes.join('\n')); set('F5', players.length);
+    const amount = price * players.length;
+    set('G5', price, { numFmt: yuan }); set('H5', { formula: 'G5*F5', result: amount }, { numFmt: yuan });
+    set('I5', remarks.join('\n'), { font: { size: remarks.length > 24 ? 9 : 10, color: { argb: 'FFFF0000' } } });
+
+    // Picture fitted into C5 (column ≈ 209 px wide; row height in pt → px)
+    const cellW = Math.trunc((256 * 29.2 + 18) / 256 * 7), cellH = rowH * 96 / 72;
+    const k = Math.min((cellW - 10) / pc.width, (cellH - 10) / pc.height);
+    const imgId = wb.addImage({ base64: pc.toDataURL('image/jpeg', 0.9), extension: 'jpeg' });
+    const EMU = 9525, iw = pc.width * k, ih = pc.height * k, ox = (cellW - iw) / 2, oy = (cellH - ih) / 2;
+    ws.addImage(imgId, {
+      tl: { nativeCol: 2, nativeColOff: Math.round(ox * EMU),        nativeRow: 4, nativeRowOff: Math.round(oy * EMU) },
+      br: { nativeCol: 2, nativeColOff: Math.round((ox + iw) * EMU), nativeRow: 4, nativeRowOff: Math.round((oy + ih) * EMU) },
+      editAs: 'oneCell' });
+
+    set('C6', 'Total value'); set('F6', { formula: 'SUM(F5:F5)', result: players.length }); set('H6', { formula: 'SUM(H5:H5)', result: amount }, { numFmt: yuan });
+    ws.getRow(6).height = 36.75;
+    set('B7', '地址/Address:'); ws.mergeCells('C7:F7'); set('C7', fields.address); ws.getRow(7).height = 50;
+    set('B8', '备注：'); ws.mergeCells('C8:I8'); set('C8', fields.note); ws.getRow(8).height = 60;
+    ws.mergeCells('A9:C9'); set('A9', '订单日期/ORDER DATE：', { alignment: { horizontal: 'left' } });
+    ws.mergeCells('D9:F9'); set('D9', date(v('date')), { numFmt: 'm/d/yyyy' });
+    set('G9', '运费/SHIPPING：'); ws.mergeCells('H9:I9'); set('H9', ship, { numFmt: yuan }); ws.getRow(9).height = 36.75;
+    ws.mergeCells('A10:C10'); set('A10', '最迟交货日期/DELIVER DATE：', { alignment: { horizontal: 'left' } });
+    ws.mergeCells('D10:F10'); set('D10', date(v('deliver')), { numFmt: 'm/d/yyyy' });
+    set('G10', '总计/Total：'); ws.mergeCells('H10:I10'); set('H10', { formula: 'H6+H9', result: amount + ship }, { numFmt: yuan }); ws.getRow(10).height = 39;
+
+    for (let r = 1; r <= 10; r++) for (let c = 1; c <= 9; c++) ws.getCell(r, c).border = box;
+
+    let buf = await wb.xlsx.writeBuffer();
+    // ExcelJS leaves the picture's own size as 0×0; Excel ignores it but Numbers and
+    // Quick Look use it, so fill in the real position and size (EMU from the sheet's top-left)
+    // Excel's own conversion: width in characters × 7 px (max digit width of the default font)
+    const pxCol = w => Math.trunc((256 * w + Math.trunc(128 / 7)) / 256 * 7), pxRow = pt => pt * 96 / 72;
+    const absX = pxCol(4) + pxCol(10.3) + ox, absY = [30, 33, 51.75, 58.5].reduce((t, h) => t + pxRow(h), 0) + oy;
+    const zip = await JSZip.loadAsync(buf);
+    const dPath = 'xl/drawings/drawing1.xml';
+    const xml = (await zip.file(dPath).async('string')).replace('<a:off x="0" y="0"/><a:ext cx="0" cy="0"/>',
+      `<a:off x="${Math.round(absX * EMU)}" y="${Math.round(absY * EMU)}"/><a:ext cx="${Math.round(iw * EMU)}" cy="${Math.round(ih * EMU)}"/>`);
+    zip.file(dPath, xml);
+    buf = await zip.generateAsync({ type: 'arraybuffer' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = `invoice-${(fields.customer || 'order').replace(/[^\w\-]+/g, '_')}-${v('date')}.xlsx`;
+    a.click();
+    closeInvoiceForm();
+    showToast('📊 Invoice скачан');
+  } catch (e) {
+    showToast('Не удалось создать Excel: ' + (e.message || e));
+  }
+  btn.disabled = false; btn.textContent = '⬇ Скачать Excel';
+}
+
 /* ── KEYBOARD ────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
@@ -2831,6 +3044,7 @@ document.addEventListener('keydown', e => {
   if (e.key==='Escape') closeLogoGallery();
   if (e.key==='Escape') closeTeamBuilder();
   if (e.key==='Escape') closeCloud();
+  if (e.key==='Escape') closeInvoiceForm();
 });
 
 /* ── TOAST ───────────────────────────────────────── */
