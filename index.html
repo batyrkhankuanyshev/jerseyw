@@ -238,6 +238,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     <button class="btn btn-ghost" onclick="openCloud()" title="Проекты в облаке — доступны на любом устройстве">☁️ Мои проекты</button>
     <button class="btn btn-ghost" onclick="saveProject()">💾 Сохранить</button>
     <button class="btn btn-ghost" onclick="loadProject()">📂 Загрузить</button>
+    <button class="btn btn-ghost" onclick="exportPrintPdf()" title="Каждый логотип и надпись отдельно на прозрачном фоне — для дизайнеров поставщика">📐 Файл для печати</button>
     <button class="btn btn-download" onclick="exportCanvas()">⬇ Скачать PNG</button>
   </div>
 </header>
@@ -1443,6 +1444,83 @@ function layerDown() { const o=S.canvas.getActiveObject(); if(o){S.canvas.sendBa
 /* ── EXPORT ──────────────────────────────────────── */
 function randomPngName() {
   return Math.random().toString(36).slice(2,10).toUpperCase() + '.png';
+}
+
+/* ── PRINT FILE FOR THE SUPPLIER ─────────────────── */
+// One A4-landscape page per design element (logos, badges, texts) on a transparent
+// background, in its kit colour, upright and large — the format suppliers' designers
+// take artwork in. Identical copies (chest + shorts logo) appear once.
+async function renderElementAlone(obj, longSide = 3000) {
+  const copy = await new Promise(r => obj.clone(r, ['plate', 'plateBox', 'tmKeep']));
+  copy.set({ angle: 0, opacity: 1, left: 0, top: 0, originX: 'center', originY: 'center' });
+  const br = copy.getBoundingRect(true, true);
+  // Images are drawn from their full-size source and text is vector, so scaling up keeps them sharp
+  const k = longSide / Math.max(br.width, br.height);
+  // Room around it: plates and outlines reach past the object's box
+  const W = Math.ceil(br.width * 1.8), H = Math.ceil(br.height * 1.8);
+  const st = new fabric.StaticCanvas(null, { width: W, height: H, enableRetinaScaling: false });
+  copy.set({ left: W / 2, top: H / 2 });
+  st.add(copy);
+  const big = st.toCanvasElement(k);
+  st.dispose();
+  // Trim to what is actually drawn
+  const ctx = big.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, big.width, big.height).data;
+  let x0 = big.width, y0 = big.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < big.height; y++) for (let x = 0; x < big.width; x++) {
+    if (d[(y * big.width + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  if (x1 < 0) return null;
+  const out = document.createElement('canvas');
+  out.width = x1 - x0 + 1; out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(big, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
+}
+
+async function exportPrintPdf() {
+  const layers = S.canvas.getObjects().filter(o => o.selectable !== false && o.visible !== false);
+  if (!layers.length) { showToast('Нет логотипов и надписей для печати'); return; }
+  showToast('📐 Готовлю файл для печати…');
+  // Same artwork twice (e.g. chest and shorts logo) → one page
+  const keyOf = o => {
+    const img = logoImageOf(o), circle = badgeCircleOf(o);
+    return JSON.stringify(o.text !== undefined
+      ? [o.text, o.fontFamily, o.fontWeight, o.fill, o.charSpacing, o.styles, o.plate]
+      : [img && img.getSrc(), img && (img.filters || []).map(f => [f.type, f.color, f.intensity]), circle && circle.fill,
+         o.type === 'group' ? o.getObjects().length : 0, o.plate]);
+  };
+  // Sleeve text is split across the front and back views of the mockup, but it's
+  // printed on the sleeve as one word — hand it over whole
+  const isSleeve = o => (S.meta.get(o)?.name || '').startsWith('Рукав:');
+  const halves = layers.filter(isSleeve).sort((a, b) => a.left - b.left);
+  const items = layers.filter(o => !isSleeve(o));
+  if (halves.length) {
+    const whole = new fabric.Text(halves.map(h => h.text).join(''), {
+      fontFamily: halves[0].fontFamily, fontWeight: halves[0].fontWeight, fill: halves[0].fill,
+      charSpacing: halves[0].charSpacing, fontSize: halves[0].fontSize, scaleX: halves[0].scaleX, scaleY: halves[0].scaleY,
+    });
+    whole.plate = halves[0].plate || null;
+    if (whole.plate) tmFitPlate(whole);
+    items.push(whole);
+  }
+  const seen = new Set(), unique = [];
+  items.forEach(o => { const k = keyOf(o); if (!seen.has(k)) { seen.add(k); unique.push(o); } });
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const PW = 297, PH = 210, M = 15;
+  let pages = 0;
+  for (const o of unique) {
+    const el = await renderElementAlone(o);
+    if (!el) continue;
+    const k = Math.min((PW - 2*M) / el.width, (PH - 2*M) / el.height);
+    const w = el.width * k, h = el.height * k;
+    if (pages) pdf.addPage();
+    pdf.addImage(el.toDataURL('image/png'), 'PNG', (PW - w) / 2, (PH - h) / 2, w, h, undefined, 'FAST');
+    pages++;
+  }
+  pdf.save(`derby-print-${Math.random().toString(36).slice(2, 8).toUpperCase()}.pdf`);
+  showToast(`📐 Файл для печати: ${pages} стр.`);
 }
 
 function exportCanvas() {
