@@ -255,6 +255,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     </label>
     <input type="file" id="file-jersey" accept="image/png,image/jpeg,image/webp" onchange="loadJersey(event)">
     <button class="btn btn-panel" style="margin-top:6px" onclick="openGallery()">🗂 Выбрать из галереи</button>
+    <button class="btn btn-panel" style="margin-top:6px" onclick="startEraser()" title="Закрасьте логотип или спонсора кистью — он исчезнет, ткань восстановится">🪄 Ластик: убрать логотипы</button>
   </div>
 
   <div class="sh">Цвет формы</div>
@@ -335,6 +336,13 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
 
 <!-- ══ CANVAS AREA ══════════════════════════════════ -->
 <main id="canvas-area">
+  <div id="eraser-bar" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:20;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 12px;gap:10px;align-items:center;box-shadow:0 6px 24px rgba(0,0,0,.5);white-space:nowrap">
+    <span style="font-size:12px;color:var(--dim)">🪄 Закрасьте, что убрать</span>
+    <span style="font-size:11px;color:var(--muted)">Кисть</span>
+    <input type="range" id="eraser-size" min="4" max="80" value="22" oninput="eraserBrushSize()" style="width:90px">
+    <button class="btn btn-primary" id="eraser-go" onclick="applyEraser()">Стереть</button>
+    <button class="btn btn-ghost" onclick="stopEraser()">Отмена</button>
+  </div>
   <div id="canvas-wrap">
     <canvas id="c"></canvas>
     <div id="canvas-placeholder">
@@ -862,6 +870,9 @@ function loadCanvasState({ w, h, json }, done) {
     document.getElementById('jersey-tint-controls').style.display = jerseyTintRect ? '' : 'none';
     objs.forEach(o => {
       if (o.selectable === false) return;
+      // Badges placed before the circle matched the badge edge: fix their circle
+      const circle = badgeCircleOf(o), bimg = logoImageOf(o);
+      if (circle && bimg && circle.radius < tmBadgeRadius(bimg)) { circle.set('radius', tmBadgeRadius(bimg)); o.dirty = true; }
       const isText = o.type === 'text' || o.type === 'i-text';
       S.meta.set(o, { id: ++lc, type: isText ? 'text' : 'image', name: o.layerName || (isText ? `Текст: ${o.text}` : 'Изображение') });
     });
@@ -1446,6 +1457,219 @@ function randomPngName() {
   return Math.random().toString(36).slice(2,10).toUpperCase() + '.png';
 }
 
+/* ── MAGIC ERASER ──────────────────────────────────
+   Remove a logo/sponsor from the kit photo. You paint over it; for each painted
+   area we find a nearby piece of the same fabric whose surroundings match (so
+   stripes and folds line up), copy it in, and blend it seamlessly (Poisson
+   blending) so shading and colour join without a visible edge. */
+function startEraser() {
+  if (!S.jerseyImg) { showToast('Сначала выберите форму'); return; }
+  S.canvas.discardActiveObject();
+  S.canvas.isDrawingMode = true;
+  S.canvas.freeDrawingBrush = new fabric.PencilBrush(S.canvas);
+  S.canvas.freeDrawingBrush.color = 'rgba(255,40,100,0.5)';
+  eraserBrushSize();
+  S.canvas.on('path:created', eraserTagPath);
+  document.getElementById('eraser-bar').style.display = 'flex';
+}
+function eraserTagPath(e) { e.path.set({ eraseMask: true, selectable: false, evented: false }); }
+function eraserBrushSize() {
+  // Brush size is in screen pixels; the canvas may be shown scaled down
+  const k = S.canvas.width / S.canvas.lowerCanvasEl.getBoundingClientRect().width || 1;
+  S.canvas.freeDrawingBrush.width = parseInt(document.getElementById('eraser-size').value) * k;
+}
+function eraserPaths() { return S.canvas.getObjects().filter(o => o.eraseMask); }
+function stopEraser() {
+  eraserPaths().forEach(p => S.canvas.remove(p));
+  S.canvas.isDrawingMode = false;
+  S.canvas.off('path:created', eraserTagPath);
+  document.getElementById('eraser-bar').style.display = 'none';
+  S.canvas.requestRenderAll();
+}
+
+async function applyEraser() {
+  const paths = eraserPaths();
+  if (!paths.length) { showToast('Закрасьте кистью то, что нужно убрать'); return; }
+  const btn = document.getElementById('eraser-go');
+  btn.disabled = true; btn.textContent = 'Стираю…';
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const el = S.jerseyImg.getElement();
+    const SW = el.naturalWidth || el.width, SH = el.naturalHeight || el.height;
+    // Mask at the photo's full resolution: paint strokes white on black
+    const st = new fabric.StaticCanvas(null, { width: S.canvas.width, height: S.canvas.height, backgroundColor: '#000', enableRetinaScaling: false });
+    for (const p of paths) {
+      const c = await new Promise(r => p.clone(r));
+      c.set({ stroke: '#fff' });
+      st.add(c);
+    }
+    const k = SW / S.jerseyImg.getScaledWidth();
+    const mc = st.toCanvasElement(k);
+    st.dispose();
+    const img = document.createElement('canvas'); img.width = SW; img.height = SH;
+    const ictx = img.getContext('2d', { willReadFrequently: true });
+    ictx.drawImage(el, 0, 0, SW, SH);
+    const id = ictx.getImageData(0, 0, SW, SH);
+    const mctx = mc.getContext('2d', { willReadFrequently: true });
+    const md = mctx.getImageData(0, 0, Math.min(mc.width, SW), Math.min(mc.height, SH)).data;
+    const mask = new Uint8Array(SW * SH);
+    const mw = Math.min(mc.width, SW);
+    for (let y = 0; y < Math.min(mc.height, SH); y++) for (let x = 0; x < mw; x++) if (md[(y * mw + x) * 4] > 60) mask[y * SW + x] = 1;
+    inpaintImage(id, mask, Math.max(2, Math.round(2 * k)));
+    ictx.putImageData(id, 0, 0);
+    const url = img.toDataURL('image/jpeg', 0.93);
+    paths.forEach(p => S.canvas.remove(p));
+    await new Promise(r => S.jerseyImg.setSrc(url, r));
+    S._kitPx = null;
+    S.canvas.requestRenderAll();
+    showToast('🪄 Готово. ⌘Z — отменить');
+  } catch (e) {
+    showToast('Не получилось стереть: ' + (e.message || e));
+  }
+  btn.disabled = false; btn.textContent = 'Стереть';
+}
+
+// In-place fill of the masked pixels of an ImageData
+function inpaintImage(id, mask, grow) {
+  const W = id.width, H = id.height, d = id.data;
+  // Grow the mask a little so anti-aliased logo edges go too
+  const hole = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!mask[y * W + x]) continue;
+    for (let dy = -grow; dy <= grow; dy++) for (let dx = -grow; dx <= grow; dx++) {
+      const X = x + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < W && Y < H && dx*dx + dy*dy <= grow*grow) hole[Y * W + X] = 1;
+    }
+  }
+  // Each separate painted area is filled on its own
+  const seen = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (!hole[i] || seen[i]) continue;
+    const comp = []; const stack = [i]; seen[i] = 1;
+    let x0 = W, y0 = H, x1 = 0, y1 = 0;
+    while (stack.length) {
+      const p = stack.pop(); comp.push(p);
+      const x = p % W, y = (p / W) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const q of [p - 1, p + 1, p - W, p + W]) {
+        const qx = q % W;
+        if (q >= 0 && q < W * H && Math.abs(qx - x) <= 1 && hole[q] && !seen[q]) { seen[q] = 1; stack.push(q); }
+      }
+    }
+    fillRegion(d, W, H, hole, comp, x0, y0, x1, y1);
+  }
+}
+
+function fillRegion(d, W, H, hole, comp, x0, y0, x1, y1) {
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  // Ring of known pixels around the hole: what the copied patch must agree with
+  const RING = Math.max(4, Math.round(Math.min(bw, bh) * 0.15));
+  const ring = [];
+  for (let y = Math.max(0, y0 - RING); y <= Math.min(H - 1, y1 + RING); y++)
+    for (let x = Math.max(0, x0 - RING); x <= Math.min(W - 1, x1 + RING); x++) {
+      const i = y * W + x;
+      if (hole[i]) continue;
+      // within RING of some hole pixel (cheap check on a cross)
+      let near = false;
+      for (let r = 1; r <= RING && !near; r++)
+        if ((x - r >= 0 && hole[i - r]) || (x + r < W && hole[i + r]) || (y - r >= 0 && hole[i - r * W]) || (y + r < H && hole[i + r * W])) near = true;
+      if (near) ring.push(i);
+    }
+  const ringS = ring.filter((_, n) => n % 2 === 0);
+  const compS = comp.filter((_, n) => n % 3 === 0);
+  // Search offsets: the source area (hole + ring shifted) must be real, unmasked fabric
+  const R = Math.round(Math.max(bw, bh) * 2.2 + 20);
+  const lum = i => d[i*4] * 0.3 + d[i*4+1] * 0.59 + d[i*4+2] * 0.11;
+  const valid = (dx, dy) => {
+    if (x0 + dx < 0 || y0 + dy < 0 || x1 + dx >= W || y1 + dy >= H) return false;
+    const o = dy * W + dx;
+    for (const p of compS) if (hole[p + o]) return false;
+    return true;
+  };
+  const score = (dx, dy) => {
+    const o = dy * W + dx; let s = 0;
+    for (const p of ringS) {
+      const q = p + o;
+      if (hole[q]) return Infinity;
+      const a = p * 4, b = q * 4;
+      s += (d[a]-d[b])**2 + (d[a+1]-d[b+1])**2 + (d[a+2]-d[b+2])**2;
+    }
+    // Mild preference for nearby sources (same lighting)
+    return s / ringS.length * (1 + 0.15 * Math.hypot(dx, dy) / R);
+  };
+  let best = null, bestS = Infinity;
+  const step = Math.max(2, Math.round(R / 45));
+  const tryOffset = (dx, dy) => {
+    if (Math.abs(dx) < bw * 0.6 && Math.abs(dy) < bh * 0.6) return;   // would overlap itself
+    if (!valid(dx, dy)) return;
+    const sc = score(dx, dy);
+    if (sc < bestS) { bestS = sc; best = [dx, dy]; }
+  };
+  // Grid through 0, plus every pure vertical / horizontal shift: those keep
+  // vertical / horizontal stripes exactly in line
+  const lim = Math.floor(R / step) * step;
+  for (let dy = -lim; dy <= lim; dy += step) for (let dx = -lim; dx <= lim; dx += step) tryOffset(dx, dy);
+  for (let t = -R; t <= R; t++) { tryOffset(0, t); tryOffset(t, 0); }
+  if (best) {   // refine around the best coarse offset
+    const [bx, by] = best;
+    for (let dy = by - step; dy <= by + step; dy++) for (let dx = bx - step; dx <= bx + step; dx++) {
+      if (!valid(dx, dy)) continue;
+      const sc = score(dx, dy);
+      if (sc < bestS) { bestS = sc; best = [dx, dy]; }
+    }
+  }
+  const off = best ? best[1] * W + best[0] : 0;
+
+  // Poisson blending: inside the hole keep the copied texture's gradients,
+  // but match the surrounding pixels at the border. Solved for the correction
+  // (result − copy), which is smooth, with SOR on precomputed neighbour tables.
+  const n = comp.length;
+  const pos = new Int32Array(W * H).fill(-1);
+  comp.forEach((p, k) => pos[p] = k);
+  const nbK = new Int32Array(n * 4), nbP = new Int32Array(n * 4), cnt = new Uint8Array(n);
+  comp.forEach((p, k) => {
+    const x = p % W;
+    let m = 0;
+    for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p - W, p + W]) {
+      if (q < 0 || q >= W * H) continue;
+      nbK[k * 4 + m] = pos[q]; nbP[k * 4 + m] = q; m++;
+    }
+    cnt[k] = m;
+  });
+  const src = c => p => best ? d[(p + off) * 4 + c] : 0;
+  let avg = [0, 0, 0];
+  if (!best) { ring.forEach(p => { for (let c = 0; c < 3; c++) avg[c] += d[p*4+c]; }); avg = avg.map(v => v / Math.max(1, ring.length)); }
+  const iters = Math.min(1500, 60 + Math.round(Math.max(bw, bh) * 2));
+  for (let c = 0; c < 3; c++) {
+    const g = src(c);
+    // corr = f − g; inside: Δcorr = 0; on the border: corr = I − g
+    const corr = new Float32Array(n);
+    const fixed = new Float32Array(n * 4);   // boundary terms per neighbour
+    for (let k = 0; k < n; k++) for (let m = 0; m < cnt[k]; m++) {
+      const q = nbP[k * 4 + m];
+      if (nbK[k * 4 + m] < 0) fixed[k * 4 + m] = d[q * 4 + c] - (best ? g(q) : avg[c]);
+    }
+    for (let it = 0; it < iters; it++) {
+      for (let k = 0; k < n; k++) {
+        let sum = 0;
+        for (let m = 0; m < cnt[k]; m++) {
+          const kq = nbK[k * 4 + m];
+          sum += kq < 0 ? fixed[k * 4 + m] : corr[kq];
+        }
+        corr[k] += 1.92 * (sum / cnt[k] - corr[k]);
+      }
+    }
+    comp.forEach((p, k) => {
+      // Small corrections (lighting) apply fully; big ones mean the pattern itself
+      // disagrees (stripe vs. gap) — smearing those makes grey haze, so damp them
+      let cv = corr[k];
+      if (best) { const a = Math.abs(cv); if (a > 70) cv = Math.sign(cv) * (70 + (a - 70) * 0.25); }
+      const v = (best ? g(p) : avg[c]) + cv;
+      d[p * 4 + c] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+    });
+  }
+}
+
 /* ── PRINT FILE FOR THE SUPPLIER ─────────────────── */
 // One A4-landscape page per design element (logos, badges, texts) on a transparent
 // background, in its kit colour, upright and large — the format suppliers' designers
@@ -1794,6 +2018,10 @@ function addSleeveText() {
   showToast(`На рукав: ${parts.filter(Boolean).join(' · ')}`);
 }
 
+// The badge image is cropped to its circle, so the circle's radius is half its size.
+// 1px inside, so the backing colour never peeks out past the badge's own edge.
+const tmBadgeRadius = img => Math.min(img.width, img.height) / 2 - 1;
+
 // Colour for the circle behind a see-through badge: it sits inside the badge ring,
 // so it only has to stand out from the logo. Kit's other colour, else the garment's own
 // colour (yellow on BVB, red on Man U), else white, else black.
@@ -1825,7 +2053,7 @@ function placeLogoOnKit(logo, kit) {
         // Fill the see-through parts (the dove) with a third colour so the badge stands out
         const other = pl.area === 'shorts' ? shirtC : shortsC;
         const circle = new fabric.Circle({
-          radius: Math.min(img.width, img.height) * 0.48,
+          radius: tmBadgeRadius(img),
           fill: tmBadgeFill(color, other, tmCleanColor(tmSampleKit(x, y, 0.1 * D))),
           originX: 'center', originY: 'center', left: 0, top: 0,
         });
@@ -3123,6 +3351,7 @@ document.addEventListener('keydown', e => {
   if (e.key==='Escape') closeTeamBuilder();
   if (e.key==='Escape') closeCloud();
   if (e.key==='Escape') closeInvoiceForm();
+  if (e.key==='Escape' && S.canvas && S.canvas.isDrawingMode) stopEraser();
 });
 
 /* ── TOAST ───────────────────────────────────────── */
