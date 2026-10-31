@@ -2982,16 +2982,25 @@ function placeLogoOnKit(logo, kit) {
   const shirtC  = tmCleanColor(tmSampleKit(cx, top + 0.9 * D, 0.12 * D));
   const shortsC = tmCleanColor(tmSampleKit(legs.l + 0.2 * (legs.r - legs.l), shortsY, 0.1 * D));
   logo.placements.forEach(pl => {
-    fabric.Image.fromURL(`logos/${logo.file}`, img => {
+    let x, y;
+    if (pl.area === 'shorts') { y = shortsY;            x = legs.l + pl.x * (legs.r - legs.l); }
+    else                      { y = top + 0.58 * D;    x = cx + pl.x * torsoW; }
+    // Full-colour logos keep their colours; on dark fabric they use their light version
+    let file = logo.file;
+    if (logo.keepColors && logo.darkFile) {
+      const [r, g, b] = tmCleanColor(tmSampleKit(x, y, 0.1 * D));
+      if (0.299 * r + 0.587 * g + 0.114 * b < 110) file = logo.darkFile;
+    }
+    fabric.Image.fromURL(`logos/${file}`, img => {
       if (!img) { showToast('Не удалось загрузить логотип'); return; }
-      let x, y;
-      if (pl.area === 'shorts') { y = shortsY;            x = legs.l + pl.x * (legs.r - legs.l); }
-      else                      { y = top + 0.58 * D;    x = cx + pl.x * torsoW; }
       const h = pl.size * D, w = h * img.width / img.height;
-      const { color, plate } = tmChooseColor({ left: x - w/2, top: y - h/2, width: w, height: h },
-                                             pl.area === 'shorts' ? shirtC : shortsC);
-      img.filters = [new fabric.Image.filters.ColorOverlay({ color, intensity: 1 })];
-      img.applyFilters();
+      let color = null, plate = null;
+      if (!logo.keepColors) {
+        ({ color, plate } = tmChooseColor({ left: x - w/2, top: y - h/2, width: w, height: h },
+                                          pl.area === 'shorts' ? shirtC : shortsC));
+        img.filters = [new fabric.Image.filters.ColorOverlay({ color, intensity: 1 })];
+        img.applyFilters();
+      }
       let layer = img;
       if (logo.badgeFill) {
         // Fill the see-through parts (the dove) with a third colour so the badge stands out

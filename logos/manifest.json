@@ -3,6 +3,7 @@
     {"id": "001", "file": "derby-ftbl.png", "name": "Derby FTBL"},
     {"id": "002", "file": "bolt.png", "name": "Bolt", "placements": [{"area": "chest", "x": -0.3, "size": 0.24}, {"area": "shorts", "x": 0.79, "size": 0.29}]},
     {"id": "003", "file": "dove-badge.png", "name": "Dove Badge", "placements": [{"area": "chest", "x": 0.3, "size": 0.26}, {"area": "shorts", "x": 0.2, "size": 0.26}], "badgeFill": true},
-    {"id": "004", "file": "kobe.png", "name": "Kobe", "placements": [{"area": "chest", "x": -0.3, "size": 0.21}, {"area": "shorts", "x": 0.79, "size": 0.22}]}
+    {"id": "004", "file": "kobe.png", "name": "Kobe", "placements": [{"area": "chest", "x": -0.3, "size": 0.21}, {"area": "shorts", "x": 0.79, "size": 0.22}]},
+    {"id": "005", "file": "shanyraq-hostel.png", "darkFile": "shanyraq-hostel-white.png", "name": "Shanyraq Hostel", "keepColors": true, "placements": [{"area": "chest", "x": 0.3, "size": 0.27}, {"area": "shorts", "x": 0.2, "size": 0.24}]}
   ]
 }
