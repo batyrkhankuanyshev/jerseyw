@@ -2082,6 +2082,9 @@ async function fontLabBuild() {
     items.push({ char: plain, mask: g.mask.slice(top * g.w), cov: g.cov.slice(top * g.w), w: g.w, h: g.h - top, y0: g.y0 + top, line: g.line });
     have.add(plain);
   }
+  // No Q in the picture: make one from the O, or the browser would show a system-font Q
+  const O = items.find(it => it.char === 'O');
+  if (O && !have.has('Q')) { items.push(fontLabQFromO(O)); have.add('Q'); }
   const used = new Set();
   for (const g of items) {
     if (used.has(g.char)) continue; used.add(g.char);
@@ -2142,6 +2145,32 @@ async function fontLabBuild() {
     <button class="btn btn-primary" id="fontlab-site" style="width:auto;margin:0 0 0 auto;${SiteFonts.admin ? '' : 'display:none'}" onclick="fontLabSaveToSite()">☁ Сохранить на сайт</button>
     <button class="btn btn-panel" style="width:auto;margin:0" onclick="fontLabDownload()">⬇ Скачать .otf</button></div>`;
   flStatus(`✅ Шрифт «${name}» готов: ${used.size} символов. Он уже есть в списках шрифтов и сохранён в этом браузере.${SiteFonts.admin ? ' Чтобы он был у всех, нажмите «☁ Сохранить на сайт».' : ''}`);
+}
+
+// Q = the O plus a diagonal tail across its bottom-right, drawn with the O's own stroke weight
+function fontLabQFromO(O) {
+  const { w, h } = O;
+  // Stroke weight: the left side of the O on its middle row
+  const row = Math.floor(h / 2) * w;
+  let a = 0; while (a < w && O.cov[row + a] < 0.5) a++;
+  let b = a; while (b < w && O.cov[row + b] >= 0.5) b++;
+  const t = Math.max(2, Math.min(b - a, w * 0.3));
+  const W = Math.ceil(w + t * 0.6), H = Math.ceil(h + t * 0.7);
+  const cov = new Float32Array(W * H), mask = new Uint8Array(W * H);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cov[y * W + x] = O.cov[y * w + x];
+  // From inside the counter, out past the bottom-right curve, dropping a little below the baseline
+  const x0 = w * 0.6, y0 = h * 0.76, x1 = W - t * 0.5, y1 = H - t * 0.5;
+  const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const px = x + 0.5, py = y + 0.5;
+    const s = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / L2));
+    const d = Math.hypot(px - x0 - s * dx, py - y0 - s * dy);
+    const c = Math.max(0, Math.min(1, t / 2 - d + 0.5));
+    const i = y * W + x;
+    if (c > cov[i]) cov[i] = c;
+    mask[i] = cov[i] >= 0.5 ? 1 : 0;
+  }
+  return { char: 'Q', mask, cov, w: W, h: H, y0: O.y0, line: O.line };
 }
 
 function fontLabDownload() {
