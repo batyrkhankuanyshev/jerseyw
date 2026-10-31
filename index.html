@@ -1271,7 +1271,13 @@ function addFontChip(family, removable) {
   wrap.appendChild(chip);
 }
 
-function removeFont(fam) {
+async function removeFont(fam) {
+  if (SiteFonts.fams.has(fam)) {   // saved to the site: gone for every visitor
+    if (!confirm('Удалить шрифт с сайта? Он пропадёт у всех посетителей.')) return;
+    const { error } = await sb.from('site_fonts').delete().eq('family', fam);
+    if (error) { showToast('Не удалось удалить: ' + error.message); return; }
+    SiteFonts.fams.delete(fam);
+  }
   document.querySelectorAll(`#prop-font option[value="${fam}"], #tm-name-font option[value="${fam}"], #tm-num-font option[value="${fam}"]`).forEach(o=>o.remove());
   document.querySelectorAll(`[data-fam="${fam}"]`).forEach(el=>el.remove());
   customFontsDB('delete', fam);
@@ -2072,8 +2078,9 @@ async function fontLabBuild() {
   pv.innerHTML = `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 14px">
     <div style="font-family:'${family}';font-size:46px;color:var(--text);line-height:1">${[...used].filter(c => c === c.toUpperCase()).join('')}</div>
     <div style="font-family:'${family}';font-size:46px;color:var(--accent);line-height:1">NURSULTAN 10</div>
-    <button class="btn btn-panel" style="width:auto;margin:0 0 0 auto" onclick="fontLabDownload()">⬇ Скачать .otf</button></div>`;
-  flStatus(`✅ Шрифт «${name}» готов: ${used.size} символов. Он уже есть в списках шрифтов и сохранён в этом браузере.`);
+    <button class="btn btn-primary" id="fontlab-site" style="width:auto;margin:0 0 0 auto;${SiteFonts.admin ? '' : 'display:none'}" onclick="fontLabSaveToSite()">☁ Сохранить на сайт</button>
+    <button class="btn btn-panel" style="width:auto;margin:0" onclick="fontLabDownload()">⬇ Скачать .otf</button></div>`;
+  flStatus(`✅ Шрифт «${name}» готов: ${used.size} символов. Он уже есть в списках шрифтов и сохранён в этом браузере.${SiteFonts.admin ? ' Чтобы он был у всех, нажмите «☁ Сохранить на сайт».' : ''}`);
 }
 
 function fontLabDownload() {
@@ -3851,8 +3858,64 @@ if (sb) {
   sb.auth.getSession().then(({ data }) => { Cloud.user = data.session?.user || null; renderCloud(); });
   sb.auth.onAuthStateChange((_, session) => {
     Cloud.user = session?.user || null;
+    checkSiteAdmin();
     if (Cloud.user) loadCloudList(); else { Cloud.list = []; renderCloud(); }
   });
+}
+
+/* ── SITE FONTS ── fonts saved for every visitor (Supabase table site_fonts, see
+   supabase/fonts.sql); only users listed in site_admins can add or remove them */
+const SiteFonts = { admin: false, fams: new Set() };
+const b64ToBuf = b64 => Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;
+const bufToB64 = buf => { const u = new Uint8Array(buf); let t = ''; for (let i = 0; i < u.length; i += 0x8000) t += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(t); };
+// A font may be re-saved under the same family: drop the old face first
+const dropFontFaces = fam => [...document.fonts].filter(ff => ff.family.replace(/["']/g, '') === fam).forEach(ff => document.fonts.delete(ff));
+
+async function addSiteFont(family, name, buf) {
+  dropFontFaces(family);
+  document.fonts.add(await new FontFace(family, buf).load());
+  SiteFonts.fams.add(family);
+  FONT_SRC.set(family, { file: name + '.otf', data: buf });
+  addFontToDropdowns(family, name);
+  addFontChip(family, SiteFonts.admin);
+}
+
+async function loadSiteFonts() {
+  const { data, error } = await sb.from('site_fonts').select('family,name,data').order('created_at');
+  if (error) return;   // table not set up yet
+  for (const f of data) try { await addSiteFont(f.family, f.name, b64ToBuf(f.data)); } catch (e) {}
+}
+if (sb) loadSiteFonts();
+
+async function checkSiteAdmin() {
+  const { data } = Cloud.user ? await sb.from('site_admins').select('user_id').eq('user_id', Cloud.user.id).maybeSingle() : { data: null };
+  SiteFonts.admin = !!data;
+  // admins get ✕ on site font chips
+  SiteFonts.fams.forEach(fam => { document.querySelectorAll(`#font-chips [data-fam="${fam}"]`).forEach(el => el.remove()); addFontChip(fam, SiteFonts.admin); });
+  const b = document.getElementById('fontlab-site');
+  if (b) b.style.display = SiteFonts.admin ? '' : 'none';
+}
+
+async function fontLabSaveToSite() {
+  const f = FL.lastFont; if (!f || !sb) return;
+  if (!SiteFonts.admin) { flStatus('Сохранять шрифты на сайт может только администратор (войдите через ☁ Облако).'); return; }
+  const family = 'Site_' + f.name.replace(/[^A-Za-z0-9]+/g, '');
+  const replace = SiteFonts.fams.has(family);
+  if (!confirm(replace ? `На сайте уже есть «${f.name}». Заменить его новым? Изменение увидят все посетители.`
+                       : `Сохранить шрифт «${f.name}» на сайт? Он появится у всех посетителей.`)) return;
+  flStatus('Сохраняю на сайт…');
+  const { error } = await sb.from('site_fonts').upsert({ family, name: f.name, data: bufToB64(f.buf) });
+  if (error) { flStatus('Не удалось сохранить: ' + error.message); return; }
+  await addSiteFont(family, f.name, f.buf);
+  // The copy kept only in this browser isn't needed any more: switch the design
+  // and the Team Builder over to the site font and drop it
+  const walk = o => { if (o.fontFamily === f.family) o.set('fontFamily', family); (o._objects || []).forEach(walk); };
+  S.canvas.getObjects().forEach(walk); S.canvas.requestRenderAll();
+  ['prop-font', 'tm-name-font', 'tm-num-font'].forEach(id => { const el = document.getElementById(id); if (el.value === f.family) el.value = family; });
+  removeFont(f.family);
+  FL.lastFont = { ...f, family, onSite: true };
+  const b = document.getElementById('fontlab-site'); b.disabled = true; b.textContent = '✅ На сайте';
+  flStatus(`✅ «${f.name}» сохранён на сайте — он есть у всех посетителей и на любом устройстве.`);
 }
 
 function openCloud() {
