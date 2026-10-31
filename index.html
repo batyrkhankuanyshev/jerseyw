@@ -88,6 +88,11 @@ input[type=color]{-webkit-appearance:none;border:1px solid var(--border);border-
 input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
 .hexpick{display:flex;gap:4px}
+.fl-card{background:var(--panel);border:2px solid var(--border);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:5px;align-items:center}
+.fl-card.ok{border-color:rgba(200,241,53,.55)} .fl-card.guess{border-color:#e0a030} .fl-card.off{opacity:.35}
+.fl-card.dup{border-color:var(--danger)}
+.fl-card canvas{width:100%;height:70px;object-fit:contain;background:#f4f1ea;border-radius:3px}
+.fl-card input[type=text]{width:46px;text-align:center;font-size:18px;font-weight:700;padding:3px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px}
 #tm-check .ck-head{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:4px;cursor:pointer}
 #tm-check .ck-list{margin-top:4px;max-height:180px;overflow-y:auto}
 #tm-check .ck-item{padding:4px 9px;border-left:2px solid;margin:2px 0;cursor:pointer;color:var(--dim);line-height:1.35}
@@ -324,6 +329,7 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
       <div style="font-size:10px;margin-top:2px;color:#444">TTF / OTF / WOFF</div>
     </label>
     <input type="file" id="file-font" accept=".ttf,.otf,.woff,.woff2" multiple onchange="loadFontFile(event)">
+    <button class="btn btn-panel" style="margin-top:6px" onclick="openFontLab()" title="Загрузите картинку с цифрами и буквами — сайт сделает из неё шрифт">🔤 Шрифт из картинки</button>
     <div id="font-chips"></div>
   </div>
 
@@ -514,6 +520,22 @@ hr.sep{border:none;border-top:1px solid var(--border2);margin:4px 0}
     <button class="btn btn-ghost" onclick="closeCloud()">✕ Закрыть</button>
   </div>
   <div id="cloud-body" style="flex:1;overflow-y:auto;padding:20px"></div>
+</div>
+
+<!-- ══ FONT FROM IMAGE ═════════════════════════════════ -->
+<div id="fontlab-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:250;display:none;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap">
+    <h2 style="font-size:14px;font-weight:700;margin-right:auto">🔤 Шрифт из картинки</h2>
+    <label class="btn btn-ghost" for="fontlab-file">📁 Выбрать картинку</label>
+    <input type="file" id="fontlab-file" accept="image/*" style="display:none" onchange="fontLabLoad(this.files[0]); this.value=''">
+    <label style="font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px"><input type="checkbox" id="fontlab-holes" checked onchange="fontLabReprocess()"> убирать эмблемы внутри символов</label>
+    <input class="fi" id="fontlab-name" placeholder="Название шрифта" style="width:200px">
+    <button class="btn btn-primary" id="fontlab-build" onclick="fontLabBuild()" disabled>Создать шрифт</button>
+    <button class="btn btn-ghost" onclick="closeFontLab()">✕</button>
+  </div>
+  <div id="fontlab-status" style="padding:8px 18px;font-size:12px;color:var(--dim)">Загрузите картинку, где цифры и буквы стоят отдельно на ровном фоне (как в превью шрифтов). Сайт сам найдёт символы и угадает, какой есть какой — вам останется проверить.</div>
+  <div id="fontlab-preview" style="padding:0 18px;display:none"></div>
+  <div id="fontlab-grid" style="flex:1;overflow-y:auto;padding:12px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px;align-content:start"></div>
 </div>
 
 <!-- ══ INVOICE (EXCEL) FORM ════════════════════════════ -->
@@ -1187,12 +1209,17 @@ function addSponsor(e) {
 }
 
 /* ── FONTS: upload ────────────────────────────────── */
+// Where each font's file comes from, so orders can ship with their fonts:
+// family → { file: name in the zip, url | data }
+const FONT_SRC = new Map();
+
 function loadFontFile(e) {
   Array.from(e.target.files).forEach(file => {
     const fam = file.name.replace(/\.[^.]+$/,'').replace(/[^a-zA-Z0-9\-_]/g,'_');
     const url = URL.createObjectURL(file);
     new FontFace(fam, `url(${url})`).load().then(f => {
       document.fonts.add(f);
+      FONT_SRC.set(fam, { file: file.name, data: file });
       addFontToDropdowns(fam, file.name);
       addFontChip(fam, true);
       showToast(`Шрифт загружен: ${file.name}`);
@@ -1215,11 +1242,13 @@ async function preloadFonts() {
     fonts.forEach((f, i) => {
       if (!faces[i]) return;
       document.fonts.add(faces[i]);
+      FONT_SRC.set(f.family, { file: f.file, url: `fonts/${encodeURIComponent(f.file)}` });
       addFontToDropdowns(f.family, f.name || f.family);
       addFontChip(f.family, false);
     });
     tmInitFonts();
   } catch(e) { /* нет манифеста — норм */ }
+  loadCustomFonts();
 }
 preloadFonts();
 
@@ -1245,6 +1274,814 @@ function addFontChip(family, removable) {
 function removeFont(fam) {
   document.querySelectorAll(`#prop-font option[value="${fam}"], #tm-name-font option[value="${fam}"], #tm-num-font option[value="${fam}"]`).forEach(o=>o.remove());
   document.querySelectorAll(`[data-fam="${fam}"]`).forEach(el=>el.remove());
+  customFontsDB('delete', fam);
+}
+
+/* ── FONT FROM IMAGE ───────────────────────────────
+   Picture of a font specimen → glyphs found automatically (thresholding,
+   connected parts merged: outlines + fills, accents) → characters guessed by
+   OCR plus "0–9 / A–Z" order → user confirms → outlines traced and saved as a
+   real .otf, registered in the page and kept in this browser (IndexedDB). */
+const FL = { img: null, glyphs: [], lines: [] };
+
+function loadScript(src) {
+  return new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('Не удалось загрузить ' + src)); document.head.appendChild(sc); });
+}
+
+// Fonts made here live in IndexedDB so they come back after a reload
+function customFontsDB(op, arg) {
+  return new Promise(resolve => {
+    let req;
+    try { req = indexedDB.open('derby-fonts', 1); } catch (e) { resolve(null); return; }
+    req.onupgradeneeded = () => req.result.createObjectStore('fonts', { keyPath: 'family' });
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const tx = req.result.transaction('fonts', op === 'all' ? 'readonly' : 'readwrite');
+      const st = tx.objectStore('fonts');
+      const r = op === 'put' ? st.put(arg) : op === 'delete' ? st.delete(arg) : st.getAll();
+      r.onsuccess = () => resolve(r.result); r.onerror = () => resolve(null);
+    };
+  });
+}
+async function loadCustomFonts() {
+  const all = await customFontsDB('all');
+  for (const f of all || []) {
+    try {
+      const face = await new FontFace(f.family, f.data).load();
+      document.fonts.add(face);
+      FONT_SRC.set(f.family, { file: f.name + '.otf', data: f.data });
+      addFontToDropdowns(f.family, f.name);
+      addFontChip(f.family, true);
+    } catch (e) {}
+  }
+}
+
+function openFontLab() { document.getElementById('fontlab-modal').style.display = 'flex'; }
+function closeFontLab() { document.getElementById('fontlab-modal').style.display = 'none'; }
+const flStatus = t => document.getElementById('fontlab-status').textContent = t;
+
+async function fontLabLoad(file) {
+  if (!file) return;
+  flStatus('Читаю картинку…');
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  FL.img = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
+  if (!document.getElementById('fontlab-name').value) document.getElementById('fontlab-name').value = file.name.replace(/\.[^.]+$/, '').slice(0, 40);
+  await fontLabReprocess();
+}
+
+async function fontLabReprocess() {
+  if (!FL.img) return;
+  flStatus('Ищу символы…');
+  await new Promise(r => setTimeout(r, 20));
+  fontLabSegment(FL.img, document.getElementById('fontlab-holes').checked);
+  fontLabRender();
+  flStatus(`Найдено символов: ${FL.glyphs.length}. Распознаю…`);
+  try { await fontLabRecognize(); }
+  catch (e) { flStatus('Не удалось распознать автоматически (' + (e.message || e) + ') — впишите символы вручную.'); }
+  fontLabRender();
+  document.getElementById('fontlab-build').disabled = false;
+}
+
+// Otsu threshold → foreground is the side the border is not
+function fontLabSegment(id, fillHoles) {
+  const { width: W, height: H, data: d } = id;
+  const lum = new Uint8Array(W * H);
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < W * H; i++) { const v = (d[i*4] * 299 + d[i*4+1] * 587 + d[i*4+2] * 114) / 1000 | 0; lum[i] = v; hist[v]++; }
+  let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sB = 0, wB = 0, best = 0, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue;
+    const wF = W * H - wB; if (!wF) break;
+    sB += t * hist[t];
+    const mB = sB / wB, mF = (sum - sB) / wF, between = wB * wF * (mB - mF) ** 2;
+    if (between > best) { best = between; thr = t; }
+  }
+  let light = 0, n = 0;
+  for (let x = 0; x < W; x++) { light += lum[x] > thr; light += lum[(H-1)*W + x] > thr; n += 2; }
+  for (let y = 0; y < H; y++) { light += lum[y*W] > thr; light += lum[y*W + W-1] > thr; n += 2; }
+  const bgLight = light > n / 2;
+  const fg = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) fg[i] = bgLight ? lum[i] <= thr : lum[i] > thr;
+
+  // Connected parts (8-neighbour)
+  const lab = new Int32Array(W * H).fill(-1);
+  const comps = [];
+  const stack = new Int32Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (!fg[i] || lab[i] >= 0) continue;
+    const id = comps.length; let sp = 0; stack[sp++] = i; lab[i] = id;
+    let x0 = W, y0 = H, x1 = 0, y1 = 0, area = 0, border = false;
+    while (sp) {
+      const p = stack[--sp]; area++;
+      const x = p % W, y = (p / W) | 0;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x === 0 || y === 0 || x === W-1 || y === H-1) border = true;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const X = x + dx, Y = y + dy;
+        if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+        const q = Y * W + X;
+        if (fg[q] && lab[q] < 0) { lab[q] = id; stack[sp++] = q; }
+      }
+    }
+    comps.push({ id, x0, y0, x1, y1, area, border });
+  }
+  const minArea = W * H * 0.00004;
+  const live = comps.filter(c => c.area >= minArea && !c.border);
+
+  // Merge parts of one symbol: nested (outline ring + fill) and stacked (accents)
+  const parent = new Map(live.map(c => [c.id, c.id]));
+  const find = a => { while (parent.get(a) !== a) a = parent.get(a); return a; };
+  const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent.set(a, b); };
+  const inside = (a, b) => a.x0 >= b.x0 - 2 && a.y0 >= b.y0 - 2 && a.x1 <= b.x1 + 2 && a.y1 <= b.y1 + 2;
+  // Accent mark (Á, Ñ): small part just above a bigger one, centred on it, not a
+  // sliver and not tiny (caption text above big digits, crest details don't qualify)
+  const accentOf = (mk, base) => {
+    const mh = mk.y1 - mk.y0, bh = base.y1 - base.y0, mw = mk.x1 - mk.x0, bw = base.x1 - base.x0;
+    const gap = base.y0 - mk.y1;
+    // over the letter (Ä's dots sit near its edges, Í's mark is wider than the I)
+    const mx = (mk.x0 + mk.x1) / 2, over = mx > base.x0 - 0.1 * bw && mx < base.x1 + 0.1 * bw;
+    // accents sit close above the letter: gap within the mark's own height
+    return gap > -0.05 * bh && gap < Math.min(0.3 * bh, Math.max(mh, mw)) && mh < 0.35 * bh && Math.max(mh, mw) > 0.1 * bh &&
+      mw < Math.max(1.2 * bw, 0.6 * bh) && over;
+  };
+  for (const a of live) for (const b of live) if (a !== b && inside(a, b)) union(a.id, b.id);
+  // a mark belongs to the one letter it is closest above
+  for (const a of live) {
+    let best = null, bd = Infinity;
+    for (const b of live) {
+      if (a === b || !accentOf(a, b)) continue;
+      const d = Math.abs((a.x0 + a.x1) / 2 - (b.x0 + b.x1) / 2);
+      if (d < bd) { bd = d; best = b; }
+    }
+    if (best) union(a.id, best.id);
+  }
+  const groups = new Map();
+  live.forEach(c => { const r = find(c.id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); });
+  // Chains of merges can drag in strays: keep only parts inside the main shape or
+  // a genuine accent over it
+  for (const [r, cs] of groups) {
+    // main shape = biggest box (an outline ring encloses its fill)
+    const boxArea = c => (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
+    const main = cs.reduce((m, c) => boxArea(c) > boxArea(m) ? c : m);
+    const box = { x0: main.x0, y0: main.y0, x1: main.x1, y1: main.y1 };
+    groups.set(r, cs.filter(c => c === main || inside(c, box) || accentOf(c, box)));
+  }
+  let glyphs = [...groups.values()].map(cs => {
+    const boxArea = c => (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
+    const main = cs.reduce((m, c) => boxArea(c) > boxArea(m) ? c : m);
+    return {
+    ids: new Set(cs.map(c => c.id)),
+    by0: main.y0, by1: main.y1,
+    marks: cs.filter(c => c.y1 < main.y0 + 0.05 * (main.y1 - main.y0)).map(c => ({ id: c.id, x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 })),
+    x0: Math.min(...cs.map(c => c.x0)), y0: Math.min(...cs.map(c => c.y0)),
+    x1: Math.max(...cs.map(c => c.x1)), y1: Math.max(...cs.map(c => c.y1)),
+  }; });
+  // small enough to keep a period and a hyphen, big enough to drop caption text
+  glyphs = glyphs.filter(g => Math.max(g.y1 - g.y0, g.x1 - g.x0) >= H * 0.015 && Math.min(g.y1 - g.y0, g.x1 - g.x0) >= 2);
+
+  // Rows of symbols, left to right
+  glyphs.sort((a, b) => a.y0 - b.y0);
+  const lines = [];
+  for (const g of glyphs) {
+    const cy = (g.y0 + g.y1) / 2;
+    let line = lines.find(l => cy > l.y0 && cy < l.y1);
+    if (!line) { line = { y0: g.y0, y1: g.y1, glyphs: [] }; lines.push(line); }
+    line.glyphs.push(g); line.y0 = Math.min(line.y0, g.y0); line.y1 = Math.max(line.y1, g.y1);
+  }
+  lines.sort((a, b) => a.y0 - b.y0);   // before numbering: glyphs keep their row's index
+  lines.forEach((l, li) => {
+    l.glyphs.sort((a, b) => a.x0 - b.x0);
+    // Letters drawn in separate pieces (this K: stem and arms with a hairline gap) —
+    // a gap far smaller than the row's normal spacing means the same letter
+    const gaps = l.glyphs.slice(1).map((g, i) => g.x0 - l.glyphs[i].x1).sort((a, b) => a - b);
+    const typical = gaps.length ? gaps[gaps.length >> 1] : 0;
+    for (let i = l.glyphs.length - 1; i > 0; i--) {
+      const a = l.glyphs[i - 1], b = l.glyphs[i];
+      if (b.x0 - a.x1 < Math.max(3, typical * 0.25)) {
+        b.ids.forEach(id => a.ids.add(id));
+        a.x0 = Math.min(a.x0, b.x0); a.x1 = Math.max(a.x1, b.x1); a.y0 = Math.min(a.y0, b.y0); a.y1 = Math.max(a.y1, b.y1);
+        l.glyphs.splice(i, 1);
+      }
+    }
+    // the merge above may join pieces: refresh the letter body
+    l.glyphs.forEach(g => { const body = [...g.ids].filter(id => !g.marks.some(m => m.id === id)).map(id => comps[id]);
+      if (body.length) { g.by0 = Math.min(...body.map(c => c.y0)); g.by1 = Math.max(...body.map(c => c.y1)); } });
+    const big = l.glyphs.filter(g => g.by1 - g.by0 > 0.5 * Math.max(...l.glyphs.map(q => q.by1 - q.by0)));
+    const hs = big.map(g => g.by1 - g.by0).sort((a, b) => a - b);
+    l.cap = hs[hs.length >> 1];
+    const bs = big.map(g => g.by1).sort((a, b) => a - b);
+    l.base = bs[bs.length >> 1];
+    l.glyphs.forEach(g => { g.line = li; g.accented = g.marks.length > 0; });
+  });
+
+  // Each symbol's own mask, holes like club crests filled in, plus a soft "ink
+  // coverage" field from the original pixels so outlines can follow anti-aliased
+  // edges with sub-pixel accuracy instead of the pixel staircase
+  for (const g of glyphs) {
+    const P = 3;   // margin so soft edges at the box border are kept
+    g.x0 = Math.max(0, g.x0 - P); g.y0 = Math.max(0, g.y0 - P); g.x1 = Math.min(W - 1, g.x1 + P); g.y1 = Math.min(H - 1, g.y1 + P);
+    const w = g.x1 - g.x0 + 1, h = g.y1 - g.y0 + 1;
+    const own = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (g.ids.has(lab[(g.y0 + y) * W + g.x0 + x])) own[y * w + x] = 1;
+    const m = own.slice();
+    if (fillHoles) fontLabFillSmallHoles(m, w, h);
+    // ink / paper brightness right around this symbol
+    const inkL = [], paperL = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x, L = lum[(g.y0 + y) * W + g.x0 + x];
+      if (own[i]) inkL.push(L);
+      else { let near = false; for (let d = 1; d <= 2 && !near; d++) near = (x >= d && own[i - d]) || (x + d < w && own[i + d]) || (y >= d && own[i - d * w]) || (y + d < h && own[i + d * w]); if (near) paperL.push(L); }
+    }
+    const med = a => { a.sort((p, q) => p - q); return a.length ? a[a.length >> 1] : 0; };
+    const fL = med(inkL), bL = med(paperL), span = (fL - bL) || 1;
+    const cov = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (m[i] && !own[i]) { cov[i] = 1; continue; }               // filled crest
+      // only pixels touching this symbol count (neighbours stay out)
+      let near = own[i];
+      for (let d = 1; d <= 2 && !near; d++) near = (x >= d && own[i - d]) || (x + d < w && own[i + d]) || (y >= d && own[i - d * w]) || (y + d < h && own[i + d * w]);
+      if (!near) continue;
+      const c = (lum[(g.y0 + y) * W + g.x0 + x] - bL) / span;
+      cov[i] = c < 0 ? 0 : c > 1 ? 1 : c;
+    }
+    g.w = w; g.h = h; g.mask = m; g.cov = cov;
+    g.bodyTop = Math.max(0, g.by0 - g.y0);   // where the letter starts under its accent
+    // the accent marks on their own, for telling ´ ^ ~ ¨ apart
+    g.markMasks = g.marks.map(mk => { const mw = mk.x1 - mk.x0 + 1, mh = mk.y1 - mk.y0 + 1, mm = new Uint8Array(mw * mh);
+      for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) mm[y * mw + x] = lab[(mk.y0 + y) * W + mk.x0 + x] === mk.id ? 1 : 0;
+      return { w: mw, h: mh, m: mm, x0: mk.x0, x1: mk.x1 }; });
+  }
+  FL.glyphs = lines.flatMap(l => l.glyphs);
+  FL.lines = lines;
+  FL.glyphs.forEach(g => { g.char = ''; g.conf = 0; g.include = true; });
+}
+
+// Fill enclosed background blobs that are small and compact (a crest inside a
+// digit) but keep counters (the hole in 0) and thin inline gaps (long rings)
+function fontLabFillSmallHoles(m, w, h) {
+  const seen = new Uint8Array(w * h), st = [];
+  for (let i = 0; i < w * h; i++) {
+    if (m[i] || seen[i]) continue;
+    const pts = []; let border = false, x0 = w, y0 = h, x1 = 0, y1 = 0;
+    st.push(i); seen[i] = 1;
+    while (st.length) {
+      const p = st.pop(); pts.push(p);
+      const x = p % w, y = (p / w) | 0;
+      if (x === 0 || y === 0 || x === w-1 || y === h-1) border = true;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p - w, p + w])
+        if (q >= 0 && q < w * h && !m[q] && !seen[q]) { seen[q] = 1; st.push(q); }
+    }
+    const boxArea = (x1 - x0 + 1) * (y1 - y0 + 1);
+    const compact = pts.length / boxArea > 0.25;
+    if (!border && compact && boxArea < w * h * 0.03) pts.forEach(p => m[p] = 1);
+  }
+}
+
+// Morphological closing (dilate then erode, square of radius r) via 1-D passes
+function fontLabClose(m, w, h, r) {
+  const pass = (src, dilate) => {
+    const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let v = dilate ? 0 : 1;
+      for (let k = -r; k <= r; k++) { const X = x + k; const s = X < 0 || X >= w ? 0 : src[y * w + X]; if (dilate ? s : !s) { v = dilate ? 1 : 0; break; } }
+      tmp[y * w + x] = v;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let v = dilate ? 0 : 1;
+      for (let k = -r; k <= r; k++) { const Y = y + k; const s = Y < 0 || Y >= h ? 0 : tmp[Y * w + x]; if (dilate ? s : !s) { v = dilate ? 1 : 0; break; } }
+      out[y * w + x] = v;
+    }
+    return out;
+  };
+  return pass(pass(m, true), false);
+}
+
+function fontLabThumb(g) {
+  const c = document.createElement('canvas'), pad = 6;
+  const k = 64 / Math.max(g.w, g.h);
+  c.width = Math.round(g.w * k) + pad * 2; c.height = Math.round(g.h * k) + pad * 2;
+  const t = document.createElement('canvas'); t.width = g.w; t.height = g.h;
+  const tx = t.getContext('2d'), im = tx.createImageData(g.w, g.h);
+  for (let i = 0; i < g.w * g.h; i++) { const v = g.mask[i] ? 20 : 244; im.data[i*4] = im.data[i*4+1] = im.data[i*4+2] = v; im.data[i*4+3] = 255; }
+  tx.putImageData(im, 0, 0);
+  const x = c.getContext('2d'); x.fillStyle = '#f4f1ea'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(t, pad, pad, g.w * k, g.h * k);
+  return c;
+}
+
+function fontLabRender() {
+  const grid = document.getElementById('fontlab-grid');
+  grid.innerHTML = '';
+  const counts = {};
+  FL.glyphs.forEach(g => { if (g.include && g.char) counts[g.char] = (counts[g.char] || 0) + 1; });
+  FL.glyphs.forEach((g, i) => {
+    const card = document.createElement('div');
+    const dup = g.include && g.char && counts[g.char] > 1;
+    card.className = 'fl-card ' + (!g.include ? 'off' : dup ? 'dup' : g.conf >= 70 ? 'ok' : 'guess');
+    card.title = dup ? 'Этот символ встречается несколько раз' : g.conf >= 70 ? 'Распознано уверенно' : 'Проверьте символ';
+    card.appendChild(fontLabThumb(g));
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 1; inp.value = g.char;
+    inp.oninput = () => { g.char = inp.value.toUpperCase(); inp.value = g.char; g.conf = 100; g.include = !!g.char; fontLabRender(); };
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = g.include; cb.title = 'Включить в шрифт';
+    cb.onchange = () => { g.include = cb.checked; fontLabRender(); };
+    row.append(inp, cb); card.appendChild(row);
+    grid.appendChild(card);
+  });
+}
+
+// Recognise each symbol by shape: compare its silhouette with 0–9 / A–Z drawn in
+// the fonts the site already has (mostly football fonts, so close relatives),
+// then fix with the order of the specimen sheet
+const FL_GRID_W = 16, FL_GRID_H = 24;
+function flFeature(src, sx, sy, sw, sh) {   // region of a black-on-white canvas
+  const c = document.createElement('canvas'); c.width = FL_GRID_W; c.height = FL_GRID_H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.imageSmoothingQuality = 'high';
+  x.fillStyle = '#fff'; x.fillRect(0, 0, FL_GRID_W, FL_GRID_H);
+  x.drawImage(src, sx, sy, sw, sh, 0, 0, FL_GRID_W, FL_GRID_H);
+  const d = x.getImageData(0, 0, FL_GRID_W, FL_GRID_H).data;
+  const v = new Float32Array(FL_GRID_W * FL_GRID_H);
+  let mean = 0;
+  for (let i = 0; i < v.length; i++) { v[i] = 1 - d[i * 4] / 255; mean += v[i]; }
+  mean /= v.length;
+  let norm = 0;
+  for (let i = 0; i < v.length; i++) { v[i] -= mean; norm += v[i] * v[i]; }
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= norm;
+  return v;
+}
+let flTemplates = null;
+function flBuildTemplates() {
+  if (flTemplates) return flTemplates;
+  const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const fams = [...new Set([...document.getElementById('prop-font').options].map(o => o.value))]
+    .filter(f => !f.startsWith('Custom_'));
+  const c = document.createElement('canvas'); c.width = 160; c.height = 160;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  flTemplates = [];
+  for (const f of fams) for (const ch of CHARS) {
+    if (!tmFontHas(f, ch)) continue;
+    x.fillStyle = '#fff'; x.fillRect(0, 0, 160, 160);
+    x.fillStyle = '#000'; x.font = `100px "${f}"`; x.textBaseline = 'alphabetic';
+    x.fillText(ch, 20, 125);
+    const d = x.getImageData(0, 0, 160, 160).data;
+    let x0 = 160, y0 = 160, x1 = -1, y1 = -1;
+    for (let y = 0; y < 160; y++) for (let xx = 0; xx < 160; xx++) if (d[(y * 160 + xx) * 4] < 128) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) continue;
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const crop = document.createElement('canvas'); crop.width = w; crop.height = h;
+    crop.getContext('2d').drawImage(c, x0, y0, w, h, 0, 0, w, h);
+    flTemplates.push({ ch, ar: w / h, v: flFeature(crop, 0, 0, w, h) });
+  }
+  return flTemplates;
+}
+
+const FL_ACCENTED = 'ÁÀÂÃÄÅÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÑÝŸÇ';
+// Which mark sits on top: two dots ¨, a tilde ~, a hat ^ or a stroke ´ / `
+function flAccentKind(g) {
+  const ms = g.markMasks || [];
+  if (!ms.length) return '';
+  if (ms.length >= 2) return '\u0308';
+  const { w, h, m } = ms[0];
+  // average ink height in the left, middle and right thirds (0 = top)
+  const third = [0, 1, 2].map(t => { let s = 0, n = 0;
+    for (let y = 0; y < h; y++) for (let x = Math.floor(t * w / 3); x < Math.floor((t + 1) * w / 3); x++) if (m[y * w + x]) { s += y; n++; }
+    return n ? s / n / h : 0.5; });
+  const [L, M, R] = third;
+  if (L - R > 0.25) return '\u0301';            // rises to the right: acute
+  if (R - L > 0.25) return '\u0300';            // grave
+  if (M < L - 0.15 && M < R - 0.15) return '\u0302';   // peak in the middle: circumflex
+  if (w / h > 1.6) return '\u0303';             // flat wave: tilde
+  return w / h < 1.3 && ms[0].m.reduce((a, b) => a + b, 0) / (w * h) > 0.6 ? '\u0307' : '\u0301';
+}
+
+async function fontLabRecognize() {
+  flStatus('Сравниваю символы со шрифтами сайта…');
+  await new Promise(r => setTimeout(r, 20));
+  const templates = flBuildTemplates();
+  for (const g of FL.glyphs) {
+    // Solid silhouette: thin inline gaps (outline + fill digits) closed first
+    const solid = fontLabClose(g.mask, g.w, g.h, Math.max(2, Math.round(Math.min(g.w, g.h) * 0.03)));
+    const c = document.createElement('canvas'); c.width = g.w; c.height = g.h;
+    const cx = c.getContext('2d'), im = cx.createImageData(g.w, g.h);
+    for (let p = 0; p < g.w * g.h; p++) { const v = solid[p] ? 0 : 255; im.data[p*4] = im.data[p*4+1] = im.data[p*4+2] = v; im.data[p*4+3] = 255; }
+    cx.putImageData(im, 0, 0);
+    // Accent marks would spoil the comparison: compare the letter part only
+    const top = g.accented ? g.bodyTop : 0;
+    const fv = flFeature(c, 0, top, g.w, g.h - top);
+    const ar = g.w / (g.h - top);
+    const best = {};
+    for (const t of templates) {
+      let dot = 0; for (let i = 0; i < fv.length; i++) dot += fv[i] * t.v[i];
+      const score = dot * Math.exp(-Math.abs(Math.log(ar / t.ar)) * 0.8);
+      if (!(t.ch in best) || score > best[t.ch]) best[t.ch] = score;
+    }
+    const ranked = Object.entries(best).sort((a, b) => b[1] - a[1]);
+    g.ranked = ranked;
+    const [ch, sc] = ranked[0] || ['', 0], second = ranked[1] ? ranked[1][1] : 0;
+    g.char = sc > 0.45 ? ch : '';
+    // confident when it fits well and clearly beats the runner-up
+    g.conf = Math.max(0, Math.min(100, Math.round((sc - 0.45) * 160 + (sc - second) * 300)));
+    // Period and hyphen: small marks judged by where they sit in the row
+    const line = FL.lines[g.line], bh = g.by1 - g.by0 + 1, bw = g.w - 6;
+    if (!g.accented && bh < line.cap * 0.4) {
+      const mid = line.base - (g.by0 + g.by1) / 2;
+      g.char = ''; g.conf = 0;
+      if (bw / bh > 0.6 && bw / bh < 1.6 && line.base - g.by1 < line.cap * 0.08) { g.char = '.'; g.conf = 80; }
+      else if (bw / bh > 1.8 && mid > line.cap * 0.25 && mid < line.cap * 0.65) { g.char = '-'; g.conf = 80; }
+    }
+  }
+  const DIG = '0123456789', ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const toDigit = { O: '0', D: '0', Q: '0', I: '1', L: '1', Z: '2', S: '5', G: '6', B: '8', T: '7' };
+  const toLetter = { '0': 'O', '1': 'I', '2': 'Z', '5': 'S', '6': 'G', '8': 'B' };
+  for (const l of FL.lines) {
+    const gs = l.glyphs;
+    // A row of accented capitals (ÁÉÍÑÓÚ…): read the letter under each mark and
+    // the mark itself, no alphabet order to follow
+    if (gs.filter(g => g.accented).length >= Math.max(2, gs.length * 0.4)) {
+      l.aligned = l.accentRow = true;
+      gs.forEach(g => {
+        if (!g.accented) { if (!'.-'.includes(g.char) && g.conf < 60) { g.char = ''; g.conf = 0; } return; }
+        const mark = flAccentKind(g);
+        const pick = (g.ranked || []).map(([c, v]) => [({ '0': 'O', '1': 'I' })[c] || c, v])
+          .find(([c]) => mark && (c + mark).normalize('NFC').length === 1 && FL_ACCENTED.includes((c + mark).normalize('NFC')));
+        if (pick) { g.char = (pick[0] + mark).normalize('NFC'); g.conf = Math.max(45, Math.min(90, Math.round((pick[1] - 0.4) * 200))); }
+        else { g.char = ''; g.conf = 0; }
+      });
+      continue;
+    }
+    const digits = gs.filter(g => DIG.includes(g.char)).length;
+    const mode = digits > gs.length / 2 ? DIG : ABC;
+    gs.forEach(g => {
+      if (mode === DIG && toDigit[g.char]) { g.char = toDigit[g.char]; g.conf = Math.min(g.conf, 65); }
+      if (mode === ABC && toLetter[g.char]) { g.char = toLetter[g.char]; g.conf = Math.min(g.conf, 65); }
+    });
+    // Specimens list characters in order (0–9, A–Z with Ñ after N): slide the row
+    // along that sequence, keep the placement most recognised symbols agree with,
+    // and fill in the rest. Rows that don't fit (icons, badges) are left alone.
+    const SEQ = mode === DIG ? DIG : 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ';
+    const base = c => c === 'Ñ' ? c : c.normalize('NFD')[0];
+    // Map the row onto the sequence in order, allowing letters the sheet leaves out
+    // (no Q) and stray symbols (a badge after the 9) — dynamic programming
+    const m = SEQ.length, n = gs.length, GAP = 0.25, SKIP = 1.2;
+    const sc = (g, j) => g.conf >= 30 && base(g.char) === SEQ[j] ? 1 + g.conf / 100 : 0;
+    let dp = new Float64Array(m + 1).fill(-Infinity); dp[0] = 0;   // state: last used index + 1
+    const back = [];
+    for (let i = 0; i < n; i++) {
+      const nd = new Float64Array(m + 1).fill(-Infinity), bk = new Int32Array(m + 1).fill(-2);
+      for (let last = 0; last <= m; last++) {
+        if (dp[last] === -Infinity) continue;
+        // symbol i not part of the sequence
+        if (dp[last] - SKIP > nd[last]) { nd[last] = dp[last] - SKIP; bk[last] = -1; }
+        for (let j = last; j < m; j++) {   // symbol i → SEQ[j]
+          const v = dp[last] - (last > 0 ? GAP * (j - last) : 0) + sc(gs[i], j);
+          if (v > nd[j + 1]) { nd[j + 1] = v; bk[j + 1] = last; }
+        }
+      }
+      back.push(bk); dp = nd;
+    }
+    let state = 0; for (let k = 1; k <= m; k++) if (dp[k] > dp[state]) state = k;
+    const map = new Array(n);
+    for (let i = n - 1; i >= 0; i--) {
+      const b = back[i][state];
+      if (b === -1) map[i] = -1; else { map[i] = state - 1; state = b; }
+    }
+    const hits = gs.filter((g, i) => map[i] >= 0 && sc(g, map[i]) > 0).length;
+    l.aligned = hits >= 3 && hits >= gs.filter(g => g.conf >= 30).length * 0.4;
+    if (l.aligned) {
+      gs.forEach((g, i) => {
+        if (map[i] < 0) { if (!'.-'.includes(g.char)) { g.char = ''; g.conf = 0; } return; }   // not part of the font
+        const e = SEQ[map[i]];
+        if (base(g.char) !== e) { g.char = e; g.conf = 55; }
+        else g.conf = Math.max(g.conf, 75);
+      });
+    }
+    // Letters with a mark above: Á É Í Ó Ú, Ñ
+    gs.forEach(g => {
+      if (!g.accented) return;
+      const acc = (base(g.char).normalize('NFD')[0] + flAccentKind(g)).normalize('NFC');
+      if (FL_ACCENTED.includes(acc)) { g.char = acc; g.conf = Math.max(g.conf, 60); }
+    });
+  }
+  // A row that couldn't be read but sits right before an aligned row of the same
+  // kind and has exactly as many symbols as come before it ("012345" before "6789")
+  for (let li = 0; li < FL.lines.length - 1; li++) {
+    const l = FL.lines[li], next = FL.lines[li + 1];
+    if (l.aligned || !next.aligned || next.accentRow) continue;
+    const SEQ = DIG.includes(next.glyphs[0].char) ? DIG : 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ';
+    const start = SEQ.indexOf(next.glyphs.find(g => g.char).char.normalize('NFD')[0]);
+    if (start === l.glyphs.length) {
+      l.glyphs.forEach((g, i) => { if (g.char !== SEQ[i]) { g.char = SEQ[i]; g.conf = 55; } });
+      l.aligned = true;
+    }
+  }
+  // …and a row right after an aligned row that continues its sequence ("6789" after
+  // "012345"), if at least one of its symbols agrees; anything past the end is dropped
+  for (let li = 1; li < FL.lines.length; li++) {
+    const l = FL.lines[li], prev = FL.lines[li - 1];
+    if (l.aligned || !prev.aligned || prev.accentRow) continue;
+    const lastCh = prev.glyphs.filter(g => g.char).pop();
+    if (!lastCh) continue;
+    const SEQ = DIG.includes(lastCh.char) ? DIG : 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ';
+    const start = SEQ.indexOf(lastCh.char.normalize('NFD')[0] === 'N' && lastCh.char === 'Ñ' ? 'Ñ' : lastCh.char.normalize('NFD')[0]) + 1;
+    if (start <= 0 || start >= SEQ.length) continue;
+    const agree = l.glyphs.some((g, i) => SEQ[start + i] && g.char === SEQ[start + i] && g.conf >= 40);
+    if (!agree) continue;
+    l.glyphs.forEach((g, i) => {
+      const e = SEQ[start + i];
+      if (!e) { g.char = ''; g.conf = 0; return; }
+      if (g.char !== e) { g.char = e; g.conf = 55; }
+    });
+    l.aligned = true;
+  }
+  // Rows that didn't line up with 0–9 / A–Z (titles, icons, logos) start switched off
+  FL.glyphs.forEach(g => { g.include = !!g.char && FL.lines[g.line].aligned && g.conf >= 30; });
+  flStatus('Проверьте символы: зелёные распознаны уверенно, оранжевые — проверьте, красные — повторы. Неверный символ исправьте, лишние картинки отключите галочкой.');
+}
+
+/* Outline tracing: walk the pixel edges with ink on the right (outer outlines go
+   one way, holes the other — what the font's fill rule needs), then smooth the
+   staircase and simplify. */
+function fontLabTrace(m, w, h, raw) {
+  const at = (x, y) => x >= 0 && y >= 0 && x < w && y < h && m[y * w + x];
+  const out = new Map();   // vertex "x,y" → list of next vertices
+  const add = (ax, ay, bx, by) => { const k = ax + ',' + ay; if (!out.has(k)) out.set(k, []); out.get(k).push([bx, by]); };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!m[y * w + x]) continue;
+    if (!at(x, y - 1)) add(x, y, x + 1, y);
+    if (!at(x + 1, y)) add(x + 1, y, x + 1, y + 1);
+    if (!at(x, y + 1)) add(x + 1, y + 1, x, y + 1);
+    if (!at(x - 1, y)) add(x, y + 1, x, y);
+  }
+  const loops = [];
+  for (const [k0, list] of out) {
+    while (list.length) {
+      const [sx, sy] = k0.split(',').map(Number);
+      const loop = [[sx, sy]];
+      let [cx, cy] = list.pop(), px = sx, py = sy;
+      let guard = 0;
+      while (!(cx === sx && cy === sy) && guard++ < 1e7) {
+        loop.push([cx, cy]);
+        const nexts = out.get(cx + ',' + cy);
+        const dx = cx - px, dy = cy - py;
+        // Prefer turning right, then straight, then left (keeps touching corners apart)
+        const order = [[-dy, dx], [dx, dy], [dy, -dx]];
+        let pick = 0;
+        for (const [ox, oy] of order) { const j = nexts.findIndex(([nx, ny]) => nx - cx === ox && ny - cy === oy); if (j >= 0) { pick = j; break; } }
+        const [nx, ny] = nexts.splice(pick, 1)[0];
+        px = cx; py = cy; cx = nx; cy = ny;
+      }
+      if (loop.length > 3) loops.push(loop);
+    }
+  }
+  // Smooth the pixel staircase (edge midpoints) and simplify (Douglas–Peucker)
+  const simplify = (pts, eps) => {
+    if (pts.length < 3) return pts;
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const st = [[0, pts.length - 1]];
+    while (st.length) {
+      const [a, b] = st.pop(); let md = 0, mi = -1;
+      const [ax, ay] = pts[a], [bx, by] = pts[b], L = Math.hypot(bx - ax, by - ay) || 1;
+      for (let i = a + 1; i < b; i++) {
+        const dd = Math.abs((bx - ax) * (ay - pts[i][1]) - (ax - pts[i][0]) * (by - ay)) / L;
+        if (dd > md) { md = dd; mi = i; }
+      }
+      if (md > eps) { keep[mi] = 1; st.push([a, mi], [mi, b]); }
+    }
+    return pts.filter((_, i) => keep[i]);
+  };
+  return loops.map(loop => {
+    const mid = loop.map((p, i) => { const q = loop[(i + 1) % loop.length]; return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; });
+    if (raw) return mid;
+    // split the closed loop at its farthest point so DP works on two open halves
+    let fi = 0, fd = 0;
+    mid.forEach((p, i) => { const dd = (p[0] - mid[0][0]) ** 2 + (p[1] - mid[0][1]) ** 2; if (dd > fd) { fd = dd; fi = i; } });
+    const eps = Math.max(0.6, Math.max(w, h) / 700);
+    const a = simplify(mid.slice(0, fi + 1), eps), b = simplify(mid.slice(fi).concat([mid[0]]), eps);
+    return a.concat(b.slice(1, -1));
+  }).filter(l => l.length >= 3);
+}
+
+/* Smooth outlines for print: a traced loop (pixel units) becomes straight lines and
+   cubic Bézier curves. Corners stay sharp, the rest is smoothed (scan noise, JPEG
+   wobble) and fitted within a fraction of a pixel; near-level lines snap level.
+   Returns contours as [{ p: start, segs: [{ c1, c2, p } | { p }] }]. */
+function fontLabVectorize(loop, size) {
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+  const mul = (a, k) => [a[0] * k, a[1] * k], dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const len = a => Math.hypot(a[0], a[1]), unit = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+  // 1. even spacing along the outline
+  const STEP = 0.5;
+  const pts = [];
+  { let carry = 0;
+    for (let i = 0; i < loop.length; i++) {
+      const a = loop[i], b = loop[(i + 1) % loop.length], d = len(sub(b, a));
+      let t = carry;
+      while (t < d) { pts.push(add(a, mul(sub(b, a), t / d))); t += STEP; }
+      carry = t - d;
+    } }
+  const n = pts.length;
+  if (n < 8) return null;
+  const at = i => pts[((i % n) + n) % n];
+  // 2. corners: sharp turns that are the sharpest around
+  const K = Math.max(3, Math.round(Math.min(4, Math.max(1.5, size * 0.012)) / STEP));
+  const turn = pts.map((p, i) => { const a = unit(sub(p, at(i - K))), b = unit(sub(at(i + K), p)); return Math.acos(Math.max(-1, Math.min(1, dot(a, b)))); });
+  let corners = [];
+  for (let i = 0; i < n; i++) {
+    if (turn[i] < 0.95) continue;   // ~55°
+    let peak = true;
+    for (let d = -K; d <= K && peak; d++) if (d && (turn[((i + d) % n + n) % n] > turn[i] || (turn[((i + d) % n + n) % n] === turn[i] && d < 0))) peak = false;
+    if (peak) corners.push(i);
+  }
+  // 3. smooth between corners (corners themselves stay put)
+  const SIG = Math.min(1.6, Math.max(0.7, size / 180)) / STEP, R = Math.ceil(SIG * 2.5);
+  const wts = Array.from({ length: R + 1 }, (_, d) => Math.exp(-d * d / (2 * SIG * SIG)));
+  const sm = pts.map(p => p.slice());
+  const smoothRun = (from, count) => {   // indices from..from+count (mod n), ends fixed
+    for (let j = 1; j < count; j++) {
+      const r = Math.min(R, j, count - j);
+      let sx = 0, sy = 0, sw = 0;
+      for (let d = -r; d <= r; d++) { const q = at(from + j + d), w = wts[Math.abs(d)]; sx += q[0] * w; sy += q[1] * w; sw += w; }
+      sm[(from + j) % n] = [sx / sw, sy / sw];
+    }
+  };
+  if (!corners.length) {
+    for (let i = 0; i < n; i++) { let sx = 0, sy = 0, sw = 0; for (let d = -R; d <= R; d++) { const q = at(i + d), w = wts[Math.abs(d)]; sx += q[0] * w; sy += q[1] * w; sw += w; } sm[i] = [sx / sw, sy / sw]; }
+  } else corners.forEach((c, k) => { const nx = corners[(k + 1) % corners.length]; smoothRun(c, ((nx - c) % n + n) % n || n); });
+  // 4. runs between corners (a loop without corners is cut in two)
+  const cuts = corners.length ? corners : [0, n >> 1];
+  const runs = cuts.map((c, k) => { const nx = cuts[(k + 1) % cuts.length], cnt = ((nx - c) % n + n) % n || n;
+    return Array.from({ length: cnt + 1 }, (_, j) => sm[(c + j) % n]); });
+  const TOL = Math.max(0.3, size / 700);
+  // straight runs → lines; near-level ones snap exactly level
+  const isLine = run => { const a = run[0], b = run[run.length - 1], L = len(sub(b, a));
+    if (L < 1) return true;
+    return run.every(p => Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / L < TOL * 1.3); };
+  const kinds = runs.map(isLine);
+  runs.forEach((run, k) => {
+    if (!kinds[k]) return;
+    const a = run[0], b = run[run.length - 1], ang = Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0])) % Math.PI;
+    const near = t => Math.abs(ang - t) < 0.05;
+    if (near(0) || near(Math.PI)) { const y = (a[1] + b[1]) / 2; a[1] = b[1] = y; }
+    else if (near(Math.PI / 2)) { const x = (a[0] + b[0]) / 2; a[0] = b[0] = x; }
+  });
+  // runs share end points: keep the shared corner objects in sync
+  runs.forEach((run, k) => { const nx = runs[(k + 1) % runs.length]; nx[0] = run[run.length - 1]; });
+  // 5. Bézier fitting (Schneider)
+  const bez = (b, t) => { const u = 1 - t; return add(add(mul(b[0], u * u * u), mul(b[1], 3 * u * u * t)), add(mul(b[2], 3 * u * t * t), mul(b[3], t * t * t))); };
+  const bezD = (b, t) => { const u = 1 - t; return add(add(mul(sub(b[1], b[0]), 3 * u * u), mul(sub(b[2], b[1]), 6 * u * t)), mul(sub(b[3], b[2]), 3 * t * t)); };
+  const bezDD = (b, t) => add(mul(add(sub(b[2], mul(b[1], 2)), b[0]), 6 * (1 - t)), mul(add(sub(b[3], mul(b[2], 2)), b[1]), 6 * t));
+  const generate = (P, u, t1, t2) => {
+    const a = P[0], b = P[P.length - 1];
+    let c00 = 0, c01 = 0, c11 = 0, x0 = 0, x1 = 0;
+    u.forEach((t, i) => {
+      const s = 1 - t, b0 = s * s * s, b1 = 3 * s * s * t, b2 = 3 * s * t * t, b3 = t * t * t;
+      const A1 = mul(t1, b1), A2 = mul(t2, b2);
+      c00 += dot(A1, A1); c01 += dot(A1, A2); c11 += dot(A2, A2);
+      const tmp = sub(P[i], add(mul(a, b0 + b1), mul(b, b2 + b3)));
+      x0 += dot(A1, tmp); x1 += dot(A2, tmp);
+    });
+    const det = c00 * c11 - c01 * c01;
+    let al = det ? (x0 * c11 - x1 * c01) / det : 0, ar = det ? (c00 * x1 - c01 * x0) / det : 0;
+    const segLen = len(sub(b, a)), eps = 1e-6 * segLen;
+    if (al < eps || ar < eps) al = ar = segLen / 3;
+    return [a, add(a, mul(t1, al)), add(b, mul(t2, ar)), b];
+  };
+  const fit = (P, t1, t2, out) => {
+    if (P.length <= 2) { const d = len(sub(P[P.length - 1], P[0])) / 3; out.push([P[0], add(P[0], mul(t1, d)), add(P[P.length - 1], mul(t2, d)), P[P.length - 1]]); return; }
+    const lens = [0]; for (let i = 1; i < P.length; i++) lens.push(lens[i - 1] + len(sub(P[i], P[i - 1])));
+    let u = lens.map(l => l / (lens[lens.length - 1] || 1));
+    let b, maxE = 0, split = P.length >> 1;
+    for (let it = 0; it < 6; it++) {
+      b = generate(P, u, t1, t2);
+      maxE = 0; split = P.length >> 1;
+      P.forEach((p, i) => { const e = len(sub(bez(b, u[i]), p)); if (e > maxE) { maxE = e; split = i; } });
+      if (maxE <= TOL) { out.push(b); return; }
+      if (maxE > TOL * 6) break;
+      u = u.map((t, i) => { const d = sub(bez(b, t), P[i]), d1 = bezD(b, t), d2 = bezDD(b, t);
+        const den = dot(d1, d1) + dot(d, d2); return den ? Math.min(1, Math.max(0, t - dot(d, d1) / den)) : t; });
+    }
+    split = Math.max(1, Math.min(P.length - 2, split));
+    const tc = unit(sub(P[split - 1], P[split + 1]));
+    fit(P.slice(0, split + 1), t1, tc, out);
+    fit(P.slice(split), mul(tc, -1), t2, out);
+  };
+  const endTan = (run, fromStart) => {   // direction over the first ~2 px
+    const m = Math.min(run.length - 1, Math.max(1, Math.round(2 / STEP)));
+    return fromStart ? unit(sub(run[m], run[0])) : unit(sub(run[run.length - 1 - m], run[run.length - 1]));
+  };
+  const segs = [];
+  runs.forEach((run, k) => {
+    if (kinds[k]) { segs.push({ p: run[run.length - 1] }); return; }
+    let t1 = endTan(run, true), t2 = endTan(run, false);
+    if (!corners.length) {   // smooth all round: matching tangents where the halves meet
+      const c = unit(sub(at(cuts[k] + 2), at(cuts[k] - 2))), e = unit(sub(at(cuts[(k + 1) % 2] - 2), at(cuts[(k + 1) % 2] + 2)));
+      t1 = c; t2 = e;
+    }
+    const out = []; fit(run, t1, t2, out);
+    out.forEach(b => segs.push({ c1: b[1], c2: b[2], p: b[3] }));
+  });
+  return { p: runs[0][0], segs };
+}
+
+async function fontLabBuild() {
+  const name = (document.getElementById('fontlab-name').value || 'My Font').trim();
+  const picked = FL.glyphs.filter(g => g.include && g.char);
+  if (!picked.length) { flStatus('Не выбран ни один символ'); return; }
+  const dupes = picked.map(g => g.char).filter((c, i, a) => a.indexOf(c) !== i);
+  if (dupes.length && !confirm(`Символы повторяются: ${[...new Set(dupes)].join(' ')}. Будет взят первый. Продолжить?`)) return;
+  flStatus('Собираю шрифт…');
+  if (!window.opentype) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js');
+  const CAP = 700, SIDE = 45;
+  const glyphs = [
+    new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: 500, path: new opentype.Path() }),
+    new opentype.Glyph({ name: 'space', unicode: 32, advanceWidth: 260, path: new opentype.Path() }),
+  ];
+  // Specimens often show only Á or Ñ: derive the plain letter by cutting the mark off
+  const items = picked.map(g => ({ char: g.char, mask: g.mask, cov: g.cov, w: g.w, h: g.h, y0: g.y0, line: g.line }));
+  const have = new Set(items.map(it => it.char));
+  for (const g of picked) {
+    const plain = g.char.normalize('NFD')[0];
+    if (!g.accented || plain === g.char || have.has(plain)) continue;
+    const top = Math.max(0, g.bodyTop - 2);
+    items.push({ char: plain, mask: g.mask.slice(top * g.w), cov: g.cov.slice(top * g.w), w: g.w, h: g.h - top, y0: g.y0 + top, line: g.line });
+    have.add(plain);
+  }
+  const used = new Set();
+  for (const g of items) {
+    if (used.has(g.char)) continue; used.add(g.char);
+    const line = FL.lines[g.line];
+    const k = CAP / line.cap;                      // every row scaled to the same cap height
+    const baseY = line.base - g.y0;                // baseline inside the glyph box (px)
+    const path = new opentype.Path();
+    // Upscale the soft coverage (bilinear) and threshold at 50%: edges land between
+    // pixels where the original anti-aliasing puts them
+    const U = Math.max(1, Math.min(4, Math.ceil(1400 / Math.max(g.w, g.h))));
+    const HW = g.w * U, HH = g.h * U, hi = new Uint8Array(HW * HH);
+    const cv = (x, y) => g.cov[Math.min(g.h - 1, Math.max(0, y)) * g.w + Math.min(g.w - 1, Math.max(0, x))];
+    for (let Y = 0; Y < HH; Y++) {
+      const sy = (Y + 0.5) / U - 0.5, y0 = Math.floor(sy), fy = sy - y0;
+      for (let X = 0; X < HW; X++) {
+        const sx = (X + 0.5) / U - 0.5, x0 = Math.floor(sx), fx = sx - x0;
+        const v = (cv(x0, y0) * (1 - fx) + cv(x0 + 1, y0) * fx) * (1 - fy) + (cv(x0, y0 + 1) * (1 - fx) + cv(x0 + 1, y0 + 1) * fx) * fy;
+        hi[Y * HW + X] = v >= 0.5 ? 1 : 0;
+      }
+    }
+    const T = ([x, y]) => [Math.round(SIDE + x * k), Math.round((baseY - y) * k)];
+    for (const loop of fontLabTrace(hi, HW, HH, true)) {
+      const c = fontLabVectorize(loop.map(([hx, hy]) => [hx / U, hy / U]), Math.max(line.cap, 1));
+      if (!c) continue;
+      path.moveTo(...T(c.p));
+      for (const sg of c.segs) sg.c1 ? path.curveTo(...T(sg.c1), ...T(sg.c2), ...T(sg.p)) : path.lineTo(...T(sg.p));
+      path.close();
+    }
+    const adv = Math.round(g.w * k + SIDE * 2);
+    const code = g.char.codePointAt(0);
+    glyphs.push(new opentype.Glyph({ name: 'u' + code.toString(16).toUpperCase(), unicode: code, advanceWidth: adv, path }));
+    // Lowercase types the same shape (shirts are printed in capitals)
+    const lower = g.char.toLowerCase();
+    if (lower !== g.char && !used.has(lower)) {
+      used.add(lower);
+      glyphs.push(new opentype.Glyph({ name: 'u' + lower.codePointAt(0).toString(16).toUpperCase(), unicode: lower.codePointAt(0), advanceWidth: adv, path }));
+    }
+  }
+  const font = new opentype.Font({ familyName: name, styleName: 'Regular', unitsPerEm: 1000, ascender: 900, descender: -200, glyphs });
+  const buf = font.toArrayBuffer();
+  // Rebuilding a font with the same name replaces the earlier version
+  for (const f of (await customFontsDB('all')) || []) if (f.name === name) removeFont(f.family);
+  const family = 'Custom_' + name.replace(/[^A-Za-z0-9]+/g, '') + '_' + Date.now().toString(36);
+  const face = await new FontFace(family, buf).load();
+  document.fonts.add(face);
+  FONT_SRC.set(family, { file: name + '.otf', data: buf });
+  addFontToDropdowns(family, name);
+  addFontChip(family, true);
+  await customFontsDB('put', { family, name, data: buf });
+  FL.lastFont = { family, name, buf };
+
+  // Preview + download
+  const pv = document.getElementById('fontlab-preview');
+  pv.style.display = '';
+  pv.innerHTML = `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 14px">
+    <div style="font-family:'${family}';font-size:46px;color:var(--text);line-height:1">${[...used].filter(c => c === c.toUpperCase()).join('')}</div>
+    <div style="font-family:'${family}';font-size:46px;color:var(--accent);line-height:1">NURSULTAN 10</div>
+    <button class="btn btn-panel" style="width:auto;margin:0 0 0 auto" onclick="fontLabDownload()">⬇ Скачать .otf</button></div>`;
+  flStatus(`✅ Шрифт «${name}» готов: ${used.size} символов. Он уже есть в списках шрифтов и сохранён в этом браузере.`);
+}
+
+function fontLabDownload() {
+  const f = FL.lastFont; if (!f) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([f.buf], { type: 'font/otf' }));
+  a.download = f.name.replace(/[^\w\- ]+/g, '').trim() + '.otf';
+  a.click();
 }
 
 /* ── PROPERTIES PANEL ────────────────────────────── */
@@ -2826,6 +3663,10 @@ async function generateTeamZip() {
   const rows = csv.slice(1).sort((a, b) => tmSizeRank(a[2]) - tmSizeRank(b[2]) || (parseInt(a[0]) || 0) - (parseInt(b[0]) || 0));
   zip.file('roster.csv', [csv[0], ...rows].map(r => r.map(q).join(',')).join('\r\n'));
 
+  prog.textContent = 'Fonts…';
+  const missing = await addOrderFonts(zip);
+  if (missing.length) zip.file('fonts/not-included.txt', 'System / web fonts, install them separately:\r\n' + missing.join('\r\n'));
+
   prog.textContent = 'Order sheet…';
   const pdf = await buildOrderPdf();
   if (pdf) zip.file('order-sheet.pdf', pdf.output('arraybuffer'));
@@ -2847,6 +3688,29 @@ async function generateTeamZip() {
 /* ── ORDER SHEET PDF ─────────────────────────────── */
 // Pages are drawn on a canvas (A4 at 150 dpi) and placed into the PDF as images,
 // so any script (Latin, Cyrillic, Kazakh) and our own fonts render correctly.
+// Put the font files the order uses (name/number fonts, text on the design) into
+// fonts/ so the print shop can open and edit the layout. Returns the fonts that
+// have no file here (system and web fonts like Inter).
+async function addOrderFonts(zip) {
+  const fams = new Set([document.getElementById('tm-num-font').value, document.getElementById('tm-name-font').value]);
+  const walk = o => { if (o.fontFamily) fams.add(o.fontFamily); (o._objects || []).forEach(walk); };
+  S.canvas.getObjects().forEach(walk);
+  fams.delete('');
+  const missing = [], names = new Set();
+  for (const fam of fams) {
+    const src = FONT_SRC.get(fam);
+    if (!src) { missing.push(fam); continue; }
+    let name = src.file.replace(/[\\/:*?"<>|]/g, '');
+    for (let n = 2; names.has(name); n++) name = src.file.replace(/(\.\w+)?$/, ` (${n})$1`);
+    names.add(name);
+    try {
+      const data = src.data || await (await fetch(src.url)).arrayBuffer();
+      zip.file('fonts/' + name, data);
+    } catch (e) { missing.push(fam); }
+  }
+  return missing;
+}
+
 async function buildOrderPdf(onProgress) {
   const valid = TB.players.filter(p => p.num || p.name);
   if (!valid.length) return null;
@@ -3351,6 +4215,7 @@ document.addEventListener('keydown', e => {
   if (e.key==='Escape') closeTeamBuilder();
   if (e.key==='Escape') closeCloud();
   if (e.key==='Escape') closeInvoiceForm();
+  if (e.key==='Escape') closeFontLab();
   if (e.key==='Escape' && S.canvas && S.canvas.isDrawingMode) stopEraser();
 });
 
