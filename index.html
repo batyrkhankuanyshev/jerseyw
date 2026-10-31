@@ -3200,6 +3200,9 @@ function renderRoster() {
 
 // Fonts: last choice (per browser) or a jersey font; Inter only if that isn't loaded yet
 function tmInitFonts() {
+  // Only the first time: later opens (and opened projects) keep the fonts already chosen
+  if (TB.fontsSet) return;
+  TB.fontsSet = true;
   [['tm-num-font', TM_DEFAULT_FONT], ['tm-name-font', '']].forEach(([id, def]) => {
     const sel = document.getElementById(id);
     let want = def;
@@ -4362,6 +4365,7 @@ async function cloudOpen(id) {
       if (TM_SAVED_SLIDERS.includes(k)) tmSetSlider(k, parseFloat(v));
       else document.getElementById(k).value = v;
     });
+    if (t.values) TB.fontsSet = true;   // the project's fonts win over the last-used ones
     TB.xManual = !!t.xManual; TB.maxNameW = t.maxNameW || 0; TB.maxNumW = t.maxNumW || 0;
     if (t.numLogoTint) document.getElementById('tm-numlogo-mode').value = 'mono';   // projects saved before the menu
     tmSetNumLogo(t.numLogo || null);
